@@ -1,0 +1,20 @@
+{
+  "name": "homeexpense-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "HomeExpense — Home-centric financial operating system for bachelors, roommates, and families",
+  "scripts": {
+    "build": "pnpm --filter \"./packages/*\" --filter \"./apps/*\" run build",
+    "test": "pnpm --filter \"./packages/*\" --filter \"./apps/*\" run test",
+    "lint": "pnpm --filter \"./packages/*\" --filter \"./apps/*\" run lint",
+    "dev:api": "pnpm --filter @homeexpense/api run dev",
+    "dev:web": "pnpm --filter @homeexpense/web run dev",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "prettier": "^3.4.2"
+  },
+  "packageManager": "pnpm@12.3.4"
+}
