@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import {
   CreateExpenseInput,
   AuditAction,
+  MemberRole,
   toCents,
   toMajor,
   validateExpenseSplits,
@@ -222,12 +223,33 @@ export class ExpensesService {
 
   async deleteExpense(homeId: string, actorUserId: string, expenseId: string) {
     return this.prisma.$transaction(async (tx) => {
+      // 1. Authenticated user & home membership check
+      const callerMember = await tx.homeMember.findUnique({
+        where: { homeId_userId: { homeId, userId: actorUserId } },
+      });
+
+      if (!callerMember || !callerMember.isActive) {
+        throw new ForbiddenException('Access denied: You are not an active member of this home.');
+      }
+
+      // 2. Resource context & ownership check
       const expense = await tx.expense.findFirst({
         where: { id: expenseId, homeId },
+        include: { payer: true },
       });
 
       if (!expense) {
-        throw new NotFoundException('Expense not found.');
+        throw new NotFoundException('Expense not found in this home.');
+      }
+
+      const isPayer = expense.payer.userId === actorUserId;
+      const hasElevatedRole = callerMember.role === MemberRole.OWNER || callerMember.role === MemberRole.ADMIN;
+
+      // Object-Level Security: Only the payer or an Owner/Admin can delete this expense
+      if (!isPayer && !hasElevatedRole) {
+        throw new ForbiddenException(
+          'Object-level security violation: You can only delete expenses that you paid for unless you are a Home Owner or Admin.'
+        );
       }
 
       await tx.expense.delete({
@@ -244,6 +266,7 @@ export class ExpensesService {
           payload: {
             amount: Number(expense.amount),
             description: expense.description,
+            payerUserId: expense.payer.userId,
           },
         },
       });

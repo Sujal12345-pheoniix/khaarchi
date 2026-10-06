@@ -52,21 +52,55 @@ enum AuditAction {
   SETTLE
   INVITE
   ROLE_CHANGE
+  LOGIN
+  FAILED_LOGIN
+  LOGOUT
+  PASSWORD_CHANGE
+  PASSWORD_RESET
+  ACCOUNT_DEACTIVATE
+  EMAIL_VERIFY
 }
 
 model User {
-  id           String   @id @default(uuid()) @db.Uuid
-  email        String   @unique
-  passwordHash String
-  name         String
-  avatarUrl    String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                         String    @id @default(uuid()) @db.Uuid
+  email                      String    @unique
+  passwordHash               String
+  name                       String
+  avatarUrl                  String?
+  emailVerified              Boolean   @default(false)
+  emailVerificationToken     String?
+  emailVerificationExpires   DateTime?
+  passwordResetToken         String?
+  passwordResetExpires       DateTime?
+  failedLoginAttempts        Int       @default(0)
+  lockoutUntil               DateTime?
+  isDeactivated              Boolean   @default(false)
+  deactivatedAt              DateTime?
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
 
   members   HomeMember[]
   auditLogs AuditLog[]
+  sessions  Session[]
 
   @@map("users")
+}
+
+model Session {
+  id               String   @id @default(uuid()) @db.Uuid
+  userId           String   @db.Uuid
+  refreshTokenHash String   @unique
+  userAgent        String?
+  ipAddress        String?
+  isValid          Boolean  @default(true)
+  expiresAt        DateTime
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
 }
 
 model Home {

@@ -1,8 +1,15 @@
-import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import {
   CreateHomeInput,
   InviteMemberInput,
+  UpdateMemberRoleInput,
   MemberRole,
   AuditAction,
 } from '@homeexpense/shared';
@@ -98,15 +105,69 @@ export class HomesService {
     return home;
   }
 
+  async updateHome(homeId: string, actorUserId: string, data: { name?: string; description?: string }) {
+    return this.prisma.$transaction(async (tx) => {
+      const home = await tx.home.update({
+        where: { id: homeId },
+        data: {
+          ...(data.name ? { name: data.name } : {}),
+          ...(data.description !== undefined ? { description: data.description } : {}),
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          homeId,
+          actorUserId,
+          action: AuditAction.UPDATE,
+          entityType: 'HOME',
+          entityId: homeId,
+          payload: data,
+        },
+      });
+
+      return home;
+    });
+  }
+
+  async deleteHome(homeId: string, actorUserId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const caller = await tx.homeMember.findUnique({
+        where: { homeId_userId: { homeId, userId: actorUserId } },
+      });
+
+      if (!caller || !caller.isActive) {
+        throw new ForbiddenException('You are not an active member of this home.');
+      }
+
+      if (caller.role !== MemberRole.OWNER) {
+        throw new ForbiddenException('Owner-only operation: Only the Home Owner can delete this home.');
+      }
+
+      await tx.home.delete({
+        where: { id: homeId },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorUserId,
+          action: AuditAction.DELETE,
+          entityType: 'HOME',
+          entityId: homeId,
+        },
+      });
+
+      return { success: true, message: 'Home and associated records deleted permanently.' };
+    });
+  }
+
   async inviteMember(homeId: string, actorUserId: string, input: InviteMemberInput) {
     return this.prisma.$transaction(async (tx) => {
-      // Check if user exists with this email
       let user = await tx.user.findUnique({
         where: { email: input.email },
       });
 
       if (!user) {
-        // Create an invited user account with temporary password placeholder
         user = await tx.user.create({
           data: {
             email: input.email,
@@ -116,7 +177,6 @@ export class HomesService {
         });
       }
 
-      // Check existing membership
       const existingMember = await tx.homeMember.findUnique({
         where: {
           homeId_userId: {
@@ -131,7 +191,6 @@ export class HomesService {
           throw new ConflictException('User is already an active member of this home.');
         }
 
-        // Reactivate membership
         const reactivated = await tx.homeMember.update({
           where: { id: existingMember.id },
           data: { isActive: true, role: input.role },
@@ -177,6 +236,168 @@ export class HomesService {
       });
 
       return member;
+    });
+  }
+
+  async updateMemberRole(
+    homeId: string,
+    actorUserId: string,
+    targetMemberId: string,
+    newRole: MemberRole
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      const caller = await tx.homeMember.findUnique({
+        where: { homeId_userId: { homeId, userId: actorUserId } },
+      });
+
+      if (!caller || !caller.isActive) {
+        throw new ForbiddenException('Access denied: You are not an active member of this home.');
+      }
+
+      const target = await tx.homeMember.findFirst({
+        where: { id: targetMemberId, homeId, isActive: true },
+      });
+
+      if (!target) {
+        throw new NotFoundException('Target member not found in this home.');
+      }
+
+      // Rule: Member cannot call role change
+      if (caller.role === MemberRole.MEMBER || caller.role === MemberRole.VIEWER) {
+        throw new ForbiddenException('Admin-only operation: Regular members cannot alter roles.');
+      }
+
+      // Rule: Target is Owner -> cannot demote owner without ownership transfer
+      if (target.role === MemberRole.OWNER) {
+        throw new ForbiddenException('Owner-only operation: Cannot modify role of Home Owner.');
+      }
+
+      // Rule: Admin cannot modify another Admin or promote to Owner
+      if (caller.role === MemberRole.ADMIN) {
+        if (target.role === MemberRole.ADMIN) {
+          throw new ForbiddenException('Admins cannot alter roles of other Admins.');
+        }
+        if (newRole === MemberRole.OWNER) {
+          throw new ForbiddenException('Owner-only operation: Only Owner can transfer ownership.');
+        }
+      }
+
+      const updated = await tx.homeMember.update({
+        where: { id: targetMemberId },
+        data: { role: newRole },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          homeId,
+          actorUserId,
+          action: AuditAction.ROLE_CHANGE,
+          entityType: 'HOME_MEMBER',
+          entityId: targetMemberId,
+          payload: { oldRole: target.role, newRole },
+        },
+      });
+
+      return updated;
+    });
+  }
+
+  async removeMember(homeId: string, actorUserId: string, targetMemberId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const caller = await tx.homeMember.findUnique({
+        where: { homeId_userId: { homeId, userId: actorUserId } },
+      });
+
+      if (!caller || !caller.isActive) {
+        throw new ForbiddenException('Access denied: You are not an active member of this home.');
+      }
+
+      const target = await tx.homeMember.findFirst({
+        where: { id: targetMemberId, homeId, isActive: true },
+      });
+
+      if (!target) {
+        throw new NotFoundException('Target member not found in this home.');
+      }
+
+      // Self-removal is allowed for non-owners
+      const isSelf = target.userId === actorUserId;
+
+      if (target.role === MemberRole.OWNER) {
+        throw new BadRequestException('The Home Owner cannot be removed. Transfer ownership first.');
+      }
+
+      if (!isSelf) {
+        if (caller.role === MemberRole.MEMBER || caller.role === MemberRole.VIEWER) {
+          throw new ForbiddenException('Admin-only operation: Members cannot remove other members.');
+        }
+
+        if (caller.role === MemberRole.ADMIN && target.role === MemberRole.ADMIN) {
+          throw new ForbiddenException('Admins cannot remove other Admins.');
+        }
+      }
+
+      const updated = await tx.homeMember.update({
+        where: { id: targetMemberId },
+        data: { isActive: false },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          homeId,
+          actorUserId,
+          action: AuditAction.DELETE,
+          entityType: 'HOME_MEMBER',
+          entityId: targetMemberId,
+          payload: { removedBy: actorUserId },
+        },
+      });
+
+      return { success: true, message: 'Member removed from home successfully.' };
+    });
+  }
+
+  async transferOwnership(homeId: string, actorUserId: string, newOwnerMemberId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const caller = await tx.homeMember.findUnique({
+        where: { homeId_userId: { homeId, userId: actorUserId } },
+      });
+
+      if (!caller || caller.role !== MemberRole.OWNER) {
+        throw new ForbiddenException('Owner-only operation: Only the Home Owner can transfer ownership.');
+      }
+
+      const newOwner = await tx.homeMember.findFirst({
+        where: { id: newOwnerMemberId, homeId, isActive: true },
+      });
+
+      if (!newOwner) {
+        throw new NotFoundException('Designated new owner is not an active member of this home.');
+      }
+
+      // Demote current owner to ADMIN, promote new member to OWNER
+      await tx.homeMember.update({
+        where: { id: caller.id },
+        data: { role: MemberRole.ADMIN },
+      });
+
+      await tx.homeMember.update({
+        where: { id: newOwner.id },
+        data: { role: MemberRole.OWNER },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          homeId,
+          actorUserId,
+          action: AuditAction.ROLE_CHANGE,
+          entityType: 'HOME_OWNERSHIP',
+          entityId: homeId,
+          payload: { previousOwnerMemberId: caller.id, newOwnerMemberId: newOwner.id },
+        },
+      });
+
+      return { success: true, message: 'Home ownership transferred successfully.' };
     });
   }
 }

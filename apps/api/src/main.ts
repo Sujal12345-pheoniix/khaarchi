@@ -6,6 +6,7 @@ import { AppModule } from './app.module.js';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter.js';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor.js';
 import { validateApiEnv } from '@homeexpense/validation';
+import helmet from 'helmet';
 
 async function bootstrap() {
   const logger = new Logger('HomeExpenseAPI');
@@ -16,12 +17,20 @@ async function bootstrap() {
 
   const app = await NestFactory.create(AppModule);
 
+  // Security Headers via Helmet
+  app.use(
+    helmet({
+      contentSecurityPolicy: false, // Retain compatibility with Swagger UI OpenAPI docs
+      crossOriginEmbedderPolicy: false,
+    })
+  );
+
   app.setGlobalPrefix('api/v1', {
     exclude: ['health'], // Allow both /health and /api/v1/health
   });
 
   app.enableCors({
-    origin: '*',
+    origin: process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',') : '*',
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
   });

@@ -6,6 +6,7 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 export interface JwtPayload {
   sub: string;
   email: string;
+  sessionId?: string;
 }
 
 @Injectable()
@@ -26,12 +27,19 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         email: true,
         name: true,
         avatarUrl: true,
+        emailVerified: true,
+        isDeactivated: true,
         createdAt: true,
+        updatedAt: true,
       },
     });
 
     if (!user) {
       throw new UnauthorizedException('User account no longer exists or session is invalid.');
+    }
+
+    if (user.isDeactivated) {
+      throw new UnauthorizedException('This account has been deactivated. Please contact support.');
     }
 
     return user;

@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import {
   CreateSettlementInput,
@@ -33,6 +33,24 @@ export class SettlementsService {
 
       if (!fromMember || !toMember) {
         throw new BadRequestException('One or both settlement participants are not active members of this home.');
+      }
+
+      // Object-Level Security: Verify actor is a participant (debtor or creditor) or Admin/Owner
+      const callerMember = await tx.homeMember.findUnique({
+        where: { homeId_userId: { homeId, userId: actorUserId } },
+      });
+
+      if (!callerMember || !callerMember.isActive) {
+        throw new ForbiddenException('Access denied: You are not an active member of this home.');
+      }
+
+      const isParticipant = fromMember.userId === actorUserId || toMember.userId === actorUserId;
+      const hasElevatedRole = callerMember.role === 'OWNER' || callerMember.role === 'ADMIN';
+
+      if (!isParticipant && !hasElevatedRole) {
+        throw new ForbiddenException(
+          'Object-level security violation: Only the settlement debtor, creditor, or a Home Admin/Owner can record this settlement.'
+        );
       }
 
       // 2. Calculate current debt between fromMember and toMember

@@ -16,6 +16,7 @@ describe('HomeExpense Backend Financial Engine', () => {
       $transaction: vi.fn(async (cb) => cb(mockPrisma)),
       homeMember: {
         findFirst: vi.fn(),
+        findUnique: vi.fn(),
         findMany: vi.fn(),
       },
       expense: {
@@ -181,9 +182,17 @@ describe('HomeExpense Backend Financial Engine', () => {
     });
 
     it('rejects settlement that exceeds the current outstanding debt obligation', async () => {
+      mockPrisma.homeMember.findUnique.mockResolvedValue({
+        id: fromMemberId,
+        homeId,
+        userId: actorUserId,
+        role: 'MEMBER',
+        isActive: true,
+      });
+
       mockPrisma.homeMember.findFirst
-        .mockResolvedValueOnce({ id: fromMemberId, homeId, user: { name: 'Bob' } })
-        .mockResolvedValueOnce({ id: toMemberId, homeId, user: { name: 'Alice' } });
+        .mockResolvedValueOnce({ id: fromMemberId, homeId, userId: actorUserId, isActive: true, user: { name: 'Bob' } })
+        .mockResolvedValueOnce({ id: toMemberId, homeId, userId: 'other-user', isActive: true, user: { name: 'Alice' } });
 
       // Bob owes Alice 50
       mockPrisma.ledgerEntry.findMany.mockResolvedValue([
@@ -201,9 +210,17 @@ describe('HomeExpense Backend Financial Engine', () => {
     });
 
     it('records valid settlement and creates offsetting ledger entry', async () => {
+      mockPrisma.homeMember.findUnique.mockResolvedValue({
+        id: fromMemberId,
+        homeId,
+        userId: actorUserId,
+        role: 'MEMBER',
+        isActive: true,
+      });
+
       mockPrisma.homeMember.findFirst
-        .mockResolvedValueOnce({ id: fromMemberId, homeId, user: { name: 'Bob' } })
-        .mockResolvedValueOnce({ id: toMemberId, homeId, user: { name: 'Alice' } });
+        .mockResolvedValueOnce({ id: fromMemberId, homeId, userId: actorUserId, isActive: true, user: { name: 'Bob' } })
+        .mockResolvedValueOnce({ id: toMemberId, homeId, userId: 'other-user', isActive: true, user: { name: 'Alice' } });
 
       mockPrisma.ledgerEntry.findMany.mockResolvedValue([
         { debtorMemberId: fromMemberId, creditorMemberId: toMemberId, amount: '50.00' },

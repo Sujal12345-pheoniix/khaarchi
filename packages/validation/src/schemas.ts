@@ -15,6 +15,37 @@ export const LoginSchema = z.object({
   password: z.string().min(1, 'Password is required'),
 });
 
+export const RefreshTokenSchema = z.object({
+  refreshToken: z.string().min(1, 'Refresh token is required'),
+});
+
+export const RequestPasswordResetSchema = z.object({
+  email: z.string().email('Invalid email address').toLowerCase().trim(),
+});
+
+export const ResetPasswordSchema = z.object({
+  token: z.string().min(1, 'Reset token is required'),
+  newPassword: z.string().min(8, 'New password must be at least 8 characters long'),
+});
+
+export const ChangePasswordSchema = z.object({
+  currentPassword: z.string().min(1, 'Current password is required'),
+  newPassword: z.string().min(8, 'New password must be at least 8 characters long'),
+});
+
+export const UpdateProfileSchema = z.object({
+  name: z.string().min(2, 'Name must be at least 2 characters long').trim().optional(),
+  avatarUrl: z.string().url('Invalid URL').nullable().optional(),
+});
+
+export const VerifyEmailSchema = z.object({
+  token: z.string().min(1, 'Verification token is required'),
+});
+
+export const UpdateMemberRoleSchema = z.object({
+  role: z.nativeEnum(MemberRole),
+});
+
 // Home Schemas
 export const CreateHomeSchema = z.object({
   name: z.string().min(2, 'Home name must be at least 2 characters').max(50).trim(),
@@ -111,6 +142,13 @@ export const CreateRecurringExpenseSchema = z.object({
 
 export type RegisterInput = z.infer<typeof RegisterSchema>;
 export type LoginInput = z.infer<typeof LoginSchema>;
+export type RefreshTokenInput = z.infer<typeof RefreshTokenSchema>;
+export type RequestPasswordResetInput = z.infer<typeof RequestPasswordResetSchema>;
+export type ResetPasswordInput = z.infer<typeof ResetPasswordSchema>;
+export type ChangePasswordInput = z.infer<typeof ChangePasswordSchema>;
+export type UpdateProfileInput = z.infer<typeof UpdateProfileSchema>;
+export type VerifyEmailInput = z.infer<typeof VerifyEmailSchema>;
+export type UpdateMemberRoleInput = z.infer<typeof UpdateMemberRoleSchema>;
 export type CreateHomeInput = z.infer<typeof CreateHomeSchema>;
 export type InviteMemberInput = z.infer<typeof InviteMemberSchema>;
 export type SplitItemInput = z.infer<typeof SplitItemSchema>;
