@@ -126,6 +126,7 @@ model Home {
   description String?
   isArchived  Boolean   @default(false)
   archivedAt  DateTime?
+  inviteCode  String?   @unique @db.VarChar(12)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 

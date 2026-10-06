@@ -70,6 +70,16 @@ export const AcceptInvitationSchema = z.object({
   token: z.string().min(1, 'Invitation token is required'),
 });
 
+export const JoinHomeByCodeSchema = z.object({
+  code: z
+    .string()
+    .min(4, 'Code must be at least 4 characters')
+    .max(16, 'Code must be at most 16 characters')
+    .trim(),
+});
+
+export type JoinHomeByCodeInput = z.infer<typeof JoinHomeByCodeSchema>;
+
 export const UpdateMemberSchema = z.object({
   nickname: z.string().max(50).nullable().optional(),
   spendingLimit: z.number().positive().nullable().optional(),

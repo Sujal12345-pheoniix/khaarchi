@@ -37,6 +37,7 @@ import {
   RotateCcw,
   Settings as SettingsIcon,
   Users,
+  Key,
 } from 'lucide-react';
 import {
   ExpenseCategory,
@@ -65,6 +66,7 @@ export default function HomeDashboardPage() {
   const [showInvite, setShowInvite] = useState(false);
   const [createdInviteLink, setCreatedInviteLink] = useState<string | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [copiedCode, setCopiedCode] = useState(false);
 
   // Settings edit states
   const [editHomeName, setEditHomeName] = useState('');
@@ -345,6 +347,22 @@ export default function HomeDashboardPage() {
     },
   });
 
+  const regenerateCodeMutation = useMutation({
+    mutationFn: () =>
+      apiClient<{ inviteCode: string }>(`/homes/${homeId}/regenerate-code`, {
+        method: 'POST',
+      }),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['home', homeId] });
+      queryClient.invalidateQueries({ queryKey: ['homes'] });
+      setSettingsSuccess(`New secret code generated: ${data.inviteCode}`);
+      setTimeout(() => setSettingsSuccess(null), 4000);
+    },
+    onError: (err: any) => {
+      setSettingsError(err.message || 'Failed to rotate secret code.');
+    },
+  });
+
   React.useEffect(() => {
     if (homeDetails) {
       setEditHomeName(homeDetails.name || '');
@@ -462,6 +480,25 @@ export default function HomeDashboardPage() {
           </div>
 
           <div className="flex items-center space-x-2.5">
+            {homeDetails?.inviteCode && (
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(homeDetails.inviteCode);
+                  setCopiedCode(true);
+                  setTimeout(() => setCopiedCode(false), 2000);
+                }}
+                className="hidden md:flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-xs font-mono text-ink hover:bg-surface-container transition"
+                title="Click to copy Household Secret Code"
+              >
+                <Key className="h-3.5 w-3.5 text-secondary" />
+                <span className="font-bold">{homeDetails.inviteCode}</span>
+                {copiedCode ? (
+                  <Check className="h-3 w-3 text-secondary ml-0.5" />
+                ) : (
+                  <Copy className="h-3 w-3 text-on-surface-variant ml-0.5" />
+                )}
+              </button>
+            )}
             <button
               onClick={() => setShowInvite(true)}
               className="hidden sm:flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-xs font-medium text-on-surface hover:bg-surface-container transition"
@@ -885,6 +922,59 @@ export default function HomeDashboardPage() {
         {/* Tab 4: Members & Invitations Directory */}
         {activeTab === 'members' && (
           <div className="space-y-6">
+            {/* Secret Code Quick-Share Card */}
+            <div className="rounded-xl border border-secondary/30 bg-secondary-container/20 p-5 shadow-level1 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-center space-x-3.5">
+                <div className="w-10 h-10 rounded-xl bg-secondary/15 flex items-center justify-center text-secondary shrink-0">
+                  <Key className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <h3 className="text-sm font-bold text-on-surface">Household Secret Code</h3>
+                    <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full bg-secondary/20 text-secondary">
+                      Instant Join
+                    </span>
+                  </div>
+                  <p className="text-xs text-on-surface-variant mt-0.5">
+                    Share this code with flatmates or family members so they can join this household instantly without email invitations.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-2.5 self-end sm:self-center">
+                <span className="font-mono text-base font-extrabold text-ink bg-surface-container px-3.5 py-1.5 rounded-xl border border-outline-variant tracking-wider">
+                  {homeDetails?.inviteCode || 'Loading...'}
+                </span>
+                <button
+                  onClick={() => {
+                    if (homeDetails?.inviteCode) {
+                      navigator.clipboard.writeText(homeDetails.inviteCode);
+                      setCopiedCode(true);
+                      setTimeout(() => setCopiedCode(false), 2000);
+                    }
+                  }}
+                  className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-ink text-white text-xs font-semibold hover:bg-neutral-800 transition shadow-sm"
+                >
+                  {copiedCode ? <Check className="h-3.5 w-3.5 text-secondary" /> : <Copy className="h-3.5 w-3.5" />}
+                  <span>{copiedCode ? 'Copied!' : 'Copy Code'}</span>
+                </button>
+                {(currentMember?.role === MemberRole.OWNER || currentMember?.role === MemberRole.ADMIN) && (
+                  <button
+                    onClick={() => {
+                      if (confirm('Rotate secret code? The old code will stop working.')) {
+                        regenerateCodeMutation.mutate();
+                      }
+                    }}
+                    disabled={regenerateCodeMutation.isPending}
+                    className="p-2 rounded-xl border border-outline-variant bg-surface-container-lowest text-on-surface-variant hover:text-ink hover:bg-surface-container transition"
+                    title="Rotate / Regenerate Secret Code"
+                  >
+                    <RotateCcw className={`h-3.5 w-3.5 ${regenerateCodeMutation.isPending ? 'animate-spin' : ''}`} />
+                  </button>
+                )}
+              </div>
+            </div>
+
             <div className="rounded-xl border border-outline-variant/60 bg-surface-container-lowest p-6 shadow-level1 space-y-6">
               <div className="flex items-center justify-between pb-4 border-b border-outline-variant/40 flex-wrap gap-3">
                 <div>
@@ -1141,6 +1231,51 @@ export default function HomeDashboardPage() {
                     <p className="text-[11px] text-outline">
                       {isBachelor ? 'Pairwise split engine & bilateral settlement' : 'Pooled ledger & budget envelope rail'}
                     </p>
+                  </div>
+
+                  <div className="p-3 rounded-lg bg-surface-container border border-outline-variant/40 space-y-1 sm:col-span-2 flex items-center justify-between gap-3">
+                    <div>
+                      <span className="text-[11px] font-semibold text-on-surface-variant uppercase tracking-wider block">
+                        Household Secret Code
+                      </span>
+                      <p className="font-mono text-base font-extrabold text-ink mt-0.5">
+                        {homeDetails?.inviteCode || 'Loading...'}
+                      </p>
+                      <p className="text-[11px] text-outline">Flatmates can enter this code to join this ledger instantly.</p>
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (homeDetails?.inviteCode) {
+                            navigator.clipboard.writeText(homeDetails.inviteCode);
+                            setCopiedCode(true);
+                            setTimeout(() => setCopiedCode(false), 2000);
+                          }
+                        }}
+                        className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-xs font-semibold text-ink hover:bg-surface-container transition"
+                      >
+                        {copiedCode ? <Check className="h-3.5 w-3.5 text-secondary" /> : <Copy className="h-3.5 w-3.5" />}
+                        <span>{copiedCode ? 'Copied' : 'Copy'}</span>
+                      </button>
+
+                      {(currentMember?.role === MemberRole.OWNER || currentMember?.role === MemberRole.ADMIN) && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (confirm('Rotate secret code? Old code will stop working.')) {
+                              regenerateCodeMutation.mutate();
+                            }
+                          }}
+                          disabled={regenerateCodeMutation.isPending}
+                          className="flex items-center space-x-1 px-3 py-1.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-xs font-semibold text-on-surface-variant hover:text-ink hover:bg-surface-container transition"
+                        >
+                          <RotateCcw className={`h-3.5 w-3.5 ${regenerateCodeMutation.isPending ? 'animate-spin' : ''}`} />
+                          <span>Rotate</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
 

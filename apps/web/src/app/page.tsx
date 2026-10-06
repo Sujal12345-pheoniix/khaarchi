@@ -17,6 +17,11 @@ import {
   Loader2,
   CheckCircle2,
   Layers,
+  Key,
+  Copy,
+  Check,
+  LogIn,
+  AlertCircle,
 } from 'lucide-react';
 import { HomeType } from '@homeexpense/shared';
 
@@ -26,6 +31,7 @@ interface HomeItem {
   type: string;
   currency: string;
   description?: string;
+  inviteCode?: string;
   currentUserRole: string;
   currentMemberId: string;
   members: { id: string }[];
@@ -36,11 +42,17 @@ export default function HomesHubPage() {
   const { user, token, isLoading: authLoading, logout } = useAuth();
   const queryClient = useQueryClient();
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showJoinModal, setShowJoinModal] = useState(false);
   const [name, setName] = useState('');
   const [type, setType] = useState<HomeType>(HomeType.BACHELOR);
   const [currency, setCurrency] = useState('INR');
   const [description, setDescription] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
+
+  // Join by code state
+  const [joinCode, setJoinCode] = useState('');
+  const [joinError, setJoinError] = useState<string | null>(null);
+  const [copiedCodeId, setCopiedCodeId] = useState<string | null>(null);
 
   // Redirect if unauthenticated
   React.useEffect(() => {
@@ -72,6 +84,34 @@ export default function HomesHubPage() {
       setFormError(err.message || 'Failed to create home.');
     },
   });
+
+  const joinHomeMutation = useMutation({
+    mutationFn: (code: string) =>
+      apiClient<{ homeId: string; message: string }>('/homes/join', {
+        method: 'POST',
+        body: JSON.stringify({ code }),
+      }),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['homes'] });
+      setShowJoinModal(false);
+      setJoinCode('');
+      setJoinError(null);
+      router.push(`/homes/${data.homeId}`);
+    },
+    onError: (err: any) => {
+      setJoinError(err.message || 'Invalid or expired invite code.');
+    },
+  });
+
+  const handleJoinSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setJoinError(null);
+    if (!joinCode.trim()) {
+      setJoinError('Please enter a secret code.');
+      return;
+    }
+    joinHomeMutation.mutate(joinCode.trim().toUpperCase());
+  };
 
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -140,13 +180,26 @@ export default function HomesHubPage() {
             </p>
           </div>
 
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="inline-flex items-center justify-center space-x-2 rounded-full bg-ink px-5 py-2.5 text-xs font-semibold text-white hover:bg-neutral-800 transition shadow-elevation-1 active:scale-[0.98]"
-          >
-            <Plus className="h-4 w-4 stroke-[2.5]" />
-            <span>Create New Home</span>
-          </button>
+          <div className="flex items-center gap-2.5">
+            <button
+              onClick={() => {
+                setJoinError(null);
+                setJoinCode('');
+                setShowJoinModal(true);
+              }}
+              className="inline-flex items-center justify-center space-x-2 rounded-full border border-outline-variant bg-surface-container-lowest px-4 py-2.5 text-xs font-semibold text-ink hover:bg-surface-container-low transition shadow-sm active:scale-[0.98]"
+            >
+              <Key className="h-3.5 w-3.5 text-secondary" />
+              <span>Join with Code</span>
+            </button>
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="inline-flex items-center justify-center space-x-2 rounded-full bg-ink px-5 py-2.5 text-xs font-semibold text-white hover:bg-neutral-800 transition shadow-elevation-1 active:scale-[0.98]"
+            >
+              <Plus className="h-4 w-4 stroke-[2.5]" />
+              <span>Create New Home</span>
+            </button>
+          </div>
         </div>
 
         {/* Homes Grid */}
@@ -197,6 +250,28 @@ export default function HomesHubPage() {
                       {h.description}
                     </p>
                   )}
+
+                  {/* Secret Code Pill */}
+                  {h.inviteCode && (
+                    <div
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigator.clipboard.writeText(h.inviteCode!);
+                        setCopiedCodeId(h.id);
+                        setTimeout(() => setCopiedCodeId(null), 2000);
+                      }}
+                      className="mt-3.5 inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-surface-container border border-outline-variant/70 text-xs font-mono text-ink hover:bg-surface-container-high transition group/code"
+                      title="Click to copy secret invite code"
+                    >
+                      <Key className="h-3 w-3 text-secondary" />
+                      <span className="font-bold tracking-wide">{h.inviteCode}</span>
+                      {copiedCodeId === h.id ? (
+                        <Check className="h-3 w-3 text-secondary ml-1" />
+                      ) : (
+                        <Copy className="h-3 w-3 text-on-surface-variant group-hover/code:text-ink ml-1" />
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="mt-8 pt-4 border-t border-outline-variant/60 flex items-center justify-between text-xs text-on-surface-variant">
@@ -216,21 +291,66 @@ export default function HomesHubPage() {
             ))}
           </div>
         ) : (
-          <div className="rounded-2xl border border-dashed border-outline-variant bg-surface-container-lowest/60 p-14 text-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-surface-container-high mx-auto mb-4 text-ink">
-              <Building2 className="h-6 w-6 stroke-[1.8]" />
+          <div className="rounded-3xl border border-outline-variant/80 bg-surface-container-lowest/80 p-8 sm:p-12 shadow-sm text-center">
+            <div className="max-w-md mx-auto mb-8">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-surface-container-high mx-auto mb-3 text-ink">
+                <Building2 className="h-7 w-7 stroke-[1.8]" />
+              </div>
+              <h2 className="text-xl font-bold tracking-tight text-ink">Welcome to HomeExpense</h2>
+              <p className="text-xs text-on-surface-variant mt-1.5 leading-relaxed">
+                You are not currently part of any household. Start tracking shared expenses by establishing a new home or joining an existing one with a secret code.
+              </p>
             </div>
-            <h3 className="text-base font-bold text-ink">No household ledgers found</h3>
-            <p className="text-xs text-on-surface-variant max-w-md mx-auto mt-1.5 mb-6 leading-relaxed">
-              You are not a member of any household yet. Establish your first shared space to track expenses, debts, and split ledgers with cent-perfect precision.
-            </p>
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="inline-flex items-center space-x-2 rounded-full bg-ink px-5 py-2.5 text-xs font-semibold text-white hover:bg-neutral-800 transition shadow-elevation-1"
-            >
-              <Plus className="h-4 w-4 stroke-[2.5]" />
-              <span>Create Your First Home</span>
-            </button>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl mx-auto text-left">
+              {/* Card 1: Create New */}
+              <div
+                onClick={() => setShowCreateModal(true)}
+                className="group cursor-pointer rounded-2xl border border-outline-variant bg-surface-container-low/60 p-5 hover:border-ink hover:bg-surface-container-low transition shadow-xs flex flex-col justify-between"
+              >
+                <div>
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-ink text-white mb-3 shadow-sm">
+                    <Plus className="h-5 w-5 stroke-[2.5]" />
+                  </div>
+                  <h3 className="text-sm font-bold text-ink group-hover:text-primary transition">
+                    Create New Home
+                  </h3>
+                  <p className="text-xs text-on-surface-variant mt-1 leading-relaxed">
+                    Set up a fresh household ledger for flatmates or family with custom currencies and split engines.
+                  </p>
+                </div>
+                <div className="mt-5 flex items-center space-x-1.5 text-xs font-semibold text-ink">
+                  <span>Establish Home</span>
+                  <ArrowRight className="h-3.5 w-3.5 group-hover:translate-x-1 transition" />
+                </div>
+              </div>
+
+              {/* Card 2: Join Existing */}
+              <div
+                onClick={() => {
+                  setJoinError(null);
+                  setJoinCode('');
+                  setShowJoinModal(true);
+                }}
+                className="group cursor-pointer rounded-2xl border border-outline-variant bg-surface-container-low/60 p-5 hover:border-secondary hover:bg-surface-container-low transition shadow-xs flex flex-col justify-between"
+              >
+                <div>
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-secondary/15 text-secondary mb-3">
+                    <Key className="h-5 w-5" />
+                  </div>
+                  <h3 className="text-sm font-bold text-ink group-hover:text-secondary transition">
+                    Join with Secret Code
+                  </h3>
+                  <p className="text-xs text-on-surface-variant mt-1 leading-relaxed">
+                    Have an invite code from your flatmate or family member? Enter it here to join instantly.
+                  </p>
+                </div>
+                <div className="mt-5 flex items-center space-x-1.5 text-xs font-semibold text-secondary">
+                  <span>Enter Code</span>
+                  <ArrowRight className="h-3.5 w-3.5 group-hover:translate-x-1 transition" />
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </main>
@@ -342,6 +462,68 @@ export default function HomesHubPage() {
                 >
                   {createHomeMutation.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                   <span>Establish Home</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Join Home Modal */}
+      {showJoinModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-outline-variant bg-surface-container-lowest p-6 shadow-elevation-3 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="text-lg font-bold tracking-tight text-ink">Join Household</h3>
+              <span className="text-[11px] font-mono uppercase bg-surface-container px-2 py-0.5 rounded text-on-surface-variant">
+                Secret Code
+              </span>
+            </div>
+            <p className="text-xs text-on-surface-variant mb-5">
+              Enter the unique secret code provided by your flatmate or family member to access the shared ledger.
+            </p>
+
+            {joinError && (
+              <div className="mb-4 rounded-xl bg-error-container border border-error/30 p-3 text-xs text-error font-medium flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>{joinError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleJoinSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-ink mb-1.5">Household Secret Code</label>
+                <div className="relative">
+                  <Key className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-on-surface-variant" />
+                  <input
+                    type="text"
+                    required
+                    value={joinCode}
+                    onChange={(e) => setJoinCode(e.target.value)}
+                    placeholder="e.g. KX-9A4B2C"
+                    className="w-full rounded-xl border border-outline-variant bg-surface-container-low pl-10 pr-3.5 py-2.5 text-sm font-mono tracking-wider text-ink uppercase placeholder-on-surface-variant/60 focus:border-ink focus:bg-surface-container-lowest focus:outline-none transition"
+                  />
+                </div>
+                <p className="text-[11px] text-on-surface-variant mt-1.5">
+                  Codes usually look like <span className="font-mono font-semibold">KX-XXXXXX</span>
+                </p>
+              </div>
+
+              <div className="flex items-center justify-end space-x-3 pt-5 border-t border-outline-variant/60">
+                <button
+                  type="button"
+                  onClick={() => setShowJoinModal(false)}
+                  className="rounded-full border border-outline-variant px-4 py-2 text-xs font-medium text-on-surface-variant hover:text-ink hover:bg-surface-container transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={joinHomeMutation.isPending}
+                  className="rounded-full bg-ink px-5 py-2 text-xs font-semibold text-white hover:bg-neutral-800 transition disabled:opacity-50 flex items-center space-x-1.5 shadow-elevation-1"
+                >
+                  {joinHomeMutation.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  <span>Join Household</span>
                 </button>
               </div>
             </form>

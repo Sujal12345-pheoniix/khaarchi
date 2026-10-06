@@ -20,11 +20,13 @@ import {
   CreateHomeSchema,
   UpdateHomeSchema,
   InviteMemberSchema,
+  JoinHomeByCodeSchema,
   UpdateMemberRoleSchema,
   UpdateMemberSchema,
   CreateHomeInput,
   UpdateHomeInput,
   InviteMemberInput,
+  JoinHomeByCodeInput,
   UpdateMemberRoleInput,
   UpdateMemberInput,
   MemberRole,
@@ -49,6 +51,18 @@ export class HomesController {
       throw new BadRequestException(parseResult.error.errors.map((e) => e.message).join(', '));
     }
     return this.homesService.createHome(user.id, parseResult.data);
+  }
+
+  @Post('join')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Join a household using its unique secret code' })
+  async joinHomeByCode(@CurrentUser() user: any, @Body() body: JoinHomeByCodeInput) {
+    const parseResult = JoinHomeByCodeSchema.safeParse(body);
+    if (!parseResult.success) {
+      throw new BadRequestException(parseResult.error.errors.map((e) => e.message).join(', '));
+    }
+    return this.homesService.joinHomeByCode(user.id, parseResult.data.code);
   }
 
   @Get()
@@ -157,6 +171,15 @@ export class HomesController {
       throw new BadRequestException('newOwnerMemberId is required.');
     }
     return this.homesService.transferOwnership(homeId, user.id, body.newOwnerMemberId);
+  }
+
+  @Post(':homeId/regenerate-code')
+  @UseGuards(JwtAuthGuard, HomeMemberGuard)
+  @RequireRoles(MemberRole.OWNER, MemberRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Regenerate the secret invite code for this household (Requires HOME_OWNER or HOME_ADMIN)' })
+  async regenerateInviteCode(@Param('homeId') homeId: string, @CurrentUser() user: any) {
+    return this.homesService.regenerateInviteCode(homeId, user.id);
   }
 
   // =========================================================================

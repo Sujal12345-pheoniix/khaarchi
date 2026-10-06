@@ -25,8 +25,18 @@ export class HomesService {
     return crypto.randomBytes(32).toString('hex');
   }
 
+  private generateHouseInviteCode(): string {
+    const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+    let code = 'KX-';
+    for (let i = 0; i < 6; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return code;
+  }
+
   async createHome(userId: string, input: CreateHomeInput) {
     return this.prisma.$transaction(async (tx) => {
+      const inviteCode = this.generateHouseInviteCode();
       const home = await tx.home.create({
         data: {
           name: input.name,
@@ -34,6 +44,7 @@ export class HomesService {
           currency: input.currency || 'INR',
           description: input.description,
           isArchived: false,
+          inviteCode,
         },
       });
 
@@ -124,6 +135,15 @@ export class HomesService {
 
     if (!home) {
       throw new NotFoundException('Home not found.');
+    }
+
+    if (!home.inviteCode) {
+      const generatedCode = this.generateHouseInviteCode();
+      await this.prisma.home.update({
+        where: { id: homeId },
+        data: { inviteCode: generatedCode },
+      });
+      home.inviteCode = generatedCode;
     }
 
     return home;
@@ -603,6 +623,128 @@ export class HomesService {
     });
 
     return { success: true, message: 'Invitation revoked successfully.' };
+  }
+
+  async joinHomeByCode(userId: string, code: string) {
+    const normalizedCode = code.trim().toUpperCase();
+
+    const home = await this.prisma.home.findFirst({
+      where: {
+        inviteCode: normalizedCode,
+      },
+    });
+
+    if (!home) {
+      throw new NotFoundException('No household found with this secret code. Please verify and try again.');
+    }
+
+    if (home.isArchived) {
+      throw new BadRequestException('This household is archived and cannot accept new members.');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      // Check if user is already a member
+      const existingMember = await tx.homeMember.findUnique({
+        where: { homeId_userId: { homeId: home.id, userId } },
+      });
+
+      if (existingMember) {
+        if (existingMember.isActive) {
+          return {
+            success: true,
+            message: 'You are already a member of this household.',
+            home,
+            membership: existingMember,
+            alreadyMember: true,
+          };
+        }
+
+        // Reactivate
+        const reactivated = await tx.homeMember.update({
+          where: { id: existingMember.id },
+          data: { isActive: true },
+        });
+
+        await tx.auditLog.create({
+          data: {
+            homeId: home.id,
+            actorUserId: userId,
+            action: AuditAction.INVITE_ACCEPT,
+            entityType: 'HOME_MEMBER',
+            entityId: reactivated.id,
+            payload: { method: 'SECRET_CODE', code: normalizedCode },
+          },
+        });
+
+        return {
+          success: true,
+          message: 'Welcome back! You have rejoined this household.',
+          home,
+          membership: reactivated,
+        };
+      }
+
+      // Add new member
+      const newMember = await tx.homeMember.create({
+        data: {
+          homeId: home.id,
+          userId,
+          role: MemberRole.MEMBER,
+          isActive: true,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          homeId: home.id,
+          actorUserId: userId,
+          action: AuditAction.INVITE_ACCEPT,
+          entityType: 'HOME_MEMBER',
+          entityId: newMember.id,
+          payload: { method: 'SECRET_CODE', code: normalizedCode },
+        },
+      });
+
+      return {
+        success: true,
+        message: 'Successfully joined household!',
+        home,
+        membership: newMember,
+      };
+    });
+  }
+
+  async regenerateInviteCode(homeId: string, actorUserId: string) {
+    const caller = await this.prisma.homeMember.findUnique({
+      where: { homeId_userId: { homeId, userId: actorUserId } },
+    });
+
+    if (!caller || !caller.isActive || (caller.role !== MemberRole.OWNER && caller.role !== MemberRole.ADMIN)) {
+      throw new ForbiddenException('Admin-only operation: You must be an Owner or Admin to rotate the secret code.');
+    }
+
+    const newCode = this.generateHouseInviteCode();
+    const updated = await this.prisma.home.update({
+      where: { id: homeId },
+      data: { inviteCode: newCode },
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        homeId,
+        actorUserId,
+        action: AuditAction.UPDATE,
+        entityType: 'HOME',
+        entityId: homeId,
+        payload: { action: 'ROTATE_SECRET_CODE', newCode },
+      },
+    });
+
+    return {
+      success: true,
+      message: 'Secret invite code regenerated successfully.',
+      inviteCode: newCode,
+    };
   }
 
   // =========================================================================
