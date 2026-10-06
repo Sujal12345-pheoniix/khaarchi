@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000",
-    "build": "next build",
+    "build:packages": "pnpm --filter \"@homeexpense/types\" --filter \"@homeexpense/validation\" --filter \"@homeexpense/financial-core\" --filter \"@homeexpense/shared\" --filter \"@homeexpense/ui\" --filter \"@homeexpense/config\" run build",
+    "build": "pnpm run build:packages && next build",
     "start": "next start -p 3000",
     "lint": "next lint"
   },

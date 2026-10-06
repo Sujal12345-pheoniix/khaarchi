@@ -1,6 +1,13 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  transpilePackages: ['@homeexpense/shared'],
+  transpilePackages: [
+    '@homeexpense/shared',
+    '@homeexpense/types',
+    '@homeexpense/validation',
+    '@homeexpense/financial-core',
+    '@homeexpense/ui',
+    '@homeexpense/config',
+  ],
   async rewrites() {
     return [
       {
