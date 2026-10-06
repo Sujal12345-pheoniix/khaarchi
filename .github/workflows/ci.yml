@@ -58,10 +58,13 @@ jobs:
           DATABASE_URL: "postgresql://test:test@localhost:5432/test?schema=public"
         run: pnpm --filter @homeexpense/database run prisma:generate
 
+      - name: Build Workspace Packages
+        run: pnpm --filter "./packages/*" run build
+
       - name: Run Financial Invariant & Unit Tests
         run: pnpm test
 
-      - name: Build All Monorepo Packages
+      - name: Build All Monorepo Applications
         env:
           DATABASE_URL: "postgresql://test:test@localhost:5432/test?schema=public"
           JWT_SECRET: "ci_pipeline_dummy_secret_key_minimum_32_characters"

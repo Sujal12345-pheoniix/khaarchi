@@ -5,6 +5,7 @@
   "description": "HomeExpense — Home-centric financial operating system for bachelors, roommates, and families",
   "scripts": {
     "build": "pnpm --filter \"./packages/*\" --filter \"./apps/*\" run build",
+    "build:packages": "pnpm --filter \"./packages/*\" run build",
     "test": "pnpm --filter \"./packages/*\" --filter \"./apps/*\" run test",
     "lint": "pnpm --filter \"./packages/*\" --filter \"./apps/*\" run lint",
     "dev:api": "pnpm --filter @homeexpense/api run dev",
