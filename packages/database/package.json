@@ -12,15 +12,22 @@
     "prisma:validate": "prisma validate",
     "prisma:db:push": "prisma db push",
     "prisma:migrate:dev": "prisma migrate dev",
-    "prisma:migrate:deploy": "prisma migrate deploy"
+    "prisma:migrate:deploy": "prisma migrate deploy",
+    "db:seed": "prisma db seed"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.4.1"
   },
   "devDependencies": {
+    "@types/bcrypt": "^5.0.2",
     "@types/node": "^22.13.4",
+    "bcrypt": "^5.1.1",
     "prisma": "^6.4.1",
     "tsup": "^8.4.0",
+    "tsx": "^4.19.3",
     "typescript": "^5.7.2"
   }
 }

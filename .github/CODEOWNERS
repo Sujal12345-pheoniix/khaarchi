@@ -1,0 +1,9 @@
+# HomeExpense Codeowners
+* @Sujal12345-pheoniix
+
+# Financial Core Engine & Invariants
+/packages/financial-core/ @Sujal12345-pheoniix
+/packages/database/ @Sujal12345-pheoniix
+/apps/api/src/expenses/ @Sujal12345-pheoniix
+/apps/api/src/balances/ @Sujal12345-pheoniix
+/apps/api/src/settlements/ @Sujal12345-pheoniix

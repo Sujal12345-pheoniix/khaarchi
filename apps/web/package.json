@@ -9,7 +9,12 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@homeexpense/config": "workspace:*",
+    "@homeexpense/financial-core": "workspace:*",
     "@homeexpense/shared": "workspace:*",
+    "@homeexpense/types": "workspace:*",
+    "@homeexpense/ui": "workspace:*",
+    "@homeexpense/validation": "workspace:*",
     "@tanstack/react-query": "^5.66.0",
     "clsx": "^2.1.1",
     "lucide-react": "^0.475.0",

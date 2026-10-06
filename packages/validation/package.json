@@ -1,5 +1,5 @@
 {
-  "name": "@homeexpense/shared",
+  "name": "@homeexpense/validation",
   "version": "0.1.0",
   "private": true,
   "main": "./dist/index.js",
@@ -7,18 +7,15 @@
   "types": "./dist/index.d.ts",
   "scripts": {
     "build": "tsup src/index.ts --format cjs,esm --dts",
-    "test": "vitest run",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
     "@homeexpense/financial-core": "workspace:*",
     "@homeexpense/types": "workspace:*",
-    "@homeexpense/validation": "workspace:*",
     "zod": "^3.24.2"
   },
   "devDependencies": {
     "tsup": "^8.4.0",
-    "typescript": "^5.7.2",
-    "vitest": "^3.0.7"
+    "typescript": "^5.7.2"
   }
 }

@@ -1,0 +1,23 @@
+{
+  "name": "@homeexpense/worker",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "tsup src/main.ts --format cjs --no-dts",
+    "start": "node dist/main.js",
+    "dev": "tsx watch src/main.ts",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@homeexpense/config": "workspace:*",
+    "@homeexpense/database": "workspace:*",
+    "@homeexpense/types": "workspace:*",
+    "@homeexpense/validation": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.4",
+    "tsup": "^8.4.0",
+    "tsx": "^4.19.3",
+    "typescript": "^5.7.2"
+  }
+}

@@ -1,0 +1,93 @@
+export enum HomeType {
+  BACHELOR = 'BACHELOR',
+  FAMILY = 'FAMILY',
+}
+
+export enum MemberRole {
+  OWNER = 'OWNER',
+  ADMIN = 'ADMIN',
+  MEMBER = 'MEMBER',
+  VIEWER = 'VIEWER',
+}
+
+export enum ExpenseCategory {
+  GROCERIES = 'GROCERIES',
+  RENT = 'RENT',
+  UTILITIES = 'UTILITIES',
+  DINING_OUT = 'DINING_OUT',
+  ENTERTAINMENT = 'ENTERTAINMENT',
+  TRAVEL = 'TRAVEL',
+  HEALTHCARE = 'HEALTHCARE',
+  HOUSEHOLD_SUPPLIES = 'HOUSEHOLD_SUPPLIES',
+  MAINTENANCE = 'MAINTENANCE',
+  OTHER = 'OTHER',
+}
+
+export enum SplitType {
+  EQUAL = 'EQUAL',
+  EXACT = 'EXACT',
+  PERCENTAGE = 'PERCENTAGE',
+  SHARES = 'SHARES',
+}
+
+export enum FinancialStatus {
+  PENDING = 'PENDING',
+  CONFIRMED = 'CONFIRMED',
+  SETTLED = 'SETTLED',
+  CANCELLED = 'CANCELLED',
+}
+
+export enum SettlementStatus {
+  PENDING = 'PENDING',
+  CONFIRMED = 'CONFIRMED',
+  CANCELLED = 'CANCELLED',
+}
+
+export enum AuditAction {
+  CREATE = 'CREATE',
+  UPDATE = 'UPDATE',
+  DELETE = 'DELETE',
+  SETTLE = 'SETTLE',
+  INVITE = 'INVITE',
+  ROLE_CHANGE = 'ROLE_CHANGE',
+}
+
+export enum ReceiptStatus {
+  PENDING_SCAN = 'PENDING_SCAN',
+  OCR_EXTRACTED = 'OCR_EXTRACTED',
+  USER_VERIFIED = 'USER_VERIFIED',
+  REJECTED = 'REJECTED',
+}
+
+export enum BillStatus {
+  UNPAID = 'UNPAID',
+  PAID = 'PAID',
+  OVERDUE = 'OVERDUE',
+}
+
+export enum RecurringInterval {
+  DAILY = 'DAILY',
+  WEEKLY = 'WEEKLY',
+  MONTHLY = 'MONTHLY',
+  YEARLY = 'YEARLY',
+}
+
+export interface UserProfile {
+  id: string;
+  email: string;
+  name: string;
+  avatarUrl?: string | null;
+  emailVerified: boolean;
+  createdAt: string;
+}
+
+export interface HomeSummary {
+  id: string;
+  name: string;
+  type: HomeType;
+  currency: string;
+  description?: string | null;
+  currentUserRole: MemberRole;
+  currentMemberId: string;
+  memberCount: number;
+}
