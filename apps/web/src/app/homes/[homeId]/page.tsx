@@ -29,6 +29,14 @@ import {
   MoreHorizontal,
   FileText,
   ShieldCheck,
+  Copy,
+  UserMinus,
+  Shield,
+  ShieldAlert,
+  Archive,
+  RotateCcw,
+  Settings as SettingsIcon,
+  Users,
 } from 'lucide-react';
 import {
   ExpenseCategory,
@@ -48,13 +56,19 @@ export default function HomeDashboardPage() {
   const { user, token, isLoading: authLoading } = useAuth();
   const queryClient = useQueryClient();
 
-  // Mode View State (Bachelor debt view vs Family envelope view)
-  const [activeTab, setActiveTab] = useState<'expenses' | 'balances' | 'envelopes'>('expenses');
+  // Mode View State (Bachelor debt view vs Family envelope view vs Members vs Settings)
+  const [activeTab, setActiveTab] = useState<'expenses' | 'balances' | 'envelopes' | 'members' | 'settings'>('expenses');
 
   // Modals state
   const [showAddExpense, setShowAddExpense] = useState(false);
   const [showSettle, setShowSettle] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
+  const [createdInviteLink, setCreatedInviteLink] = useState<string | null>(null);
+  const [copiedLink, setCopiedLink] = useState(false);
+
+  // Settings edit states
+  const [editHomeName, setEditHomeName] = useState('');
+  const [editHomeDesc, setEditHomeDesc] = useState('');
 
   // Form states
   const [expenseDesc, setExpenseDesc] = useState('');
@@ -79,6 +93,10 @@ export default function HomeDashboardPage() {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<MemberRole>(MemberRole.MEMBER);
   const [inviteError, setInviteError] = useState<string | null>(null);
+
+  // Settings Feedback
+  const [settingsSuccess, setSettingsSuccess] = useState<string | null>(null);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
 
   // Redirect if unauthenticated
   React.useEffect(() => {
@@ -226,21 +244,113 @@ export default function HomeDashboardPage() {
 
   const inviteMemberMutation = useMutation({
     mutationFn: (body: any) =>
-      apiClient(`/homes/${homeId}/members`, {
+      apiClient(`/homes/${homeId}/invitations`, {
         method: 'POST',
         body: JSON.stringify(body),
       }),
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['home', homeId] });
-      queryClient.invalidateQueries({ queryKey: ['balances', homeId] });
-      setShowInvite(false);
+      if (data?.token) {
+        setCreatedInviteLink(`${window.location.origin}/invite/${data.token}`);
+      } else {
+        setShowInvite(false);
+      }
       setInviteEmail('');
       setInviteError(null);
     },
     onError: (err: any) => {
-      setInviteError(err.message || 'Failed to invite member.');
+      setInviteError(err.message || 'Failed to generate invitation.');
     },
   });
+
+  const revokeInvitationMutation = useMutation({
+    mutationFn: (invitationId: string) =>
+      apiClient(`/homes/${homeId}/invitations/${invitationId}`, {
+        method: 'DELETE',
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['home', homeId] });
+    },
+  });
+
+  const updateMemberRoleMutation = useMutation({
+    mutationFn: ({ memberId, role }: { memberId: string; role: MemberRole }) =>
+      apiClient(`/homes/${homeId}/members/${memberId}/role`, {
+        method: 'PATCH',
+        body: JSON.stringify({ role }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['home', homeId] });
+    },
+  });
+
+  const deactivateMemberMutation = useMutation({
+    mutationFn: (memberId: string) =>
+      apiClient(`/homes/${homeId}/members/${memberId}`, {
+        method: 'DELETE',
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['home', homeId] });
+      queryClient.invalidateQueries({ queryKey: ['balances', homeId] });
+    },
+  });
+
+  const archiveHomeMutation = useMutation({
+    mutationFn: () =>
+      apiClient(`/homes/${homeId}/archive`, {
+        method: 'POST',
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['home', homeId] });
+      queryClient.invalidateQueries({ queryKey: ['homes'] });
+    },
+  });
+
+  const restoreHomeMutation = useMutation({
+    mutationFn: () =>
+      apiClient(`/homes/${homeId}/restore`, {
+        method: 'POST',
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['home', homeId] });
+      queryClient.invalidateQueries({ queryKey: ['homes'] });
+    },
+  });
+
+  const updateHomeMutation = useMutation({
+    mutationFn: (body: { name?: string; description?: string }) =>
+      apiClient(`/homes/${homeId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['home', homeId] });
+      queryClient.invalidateQueries({ queryKey: ['homes'] });
+      setSettingsSuccess('Household settings saved successfully.');
+      setTimeout(() => setSettingsSuccess(null), 3500);
+    },
+    onError: (err: any) => {
+      setSettingsError(err.message || 'Failed to update household settings.');
+    },
+  });
+
+  const deleteHomeMutation = useMutation({
+    mutationFn: () =>
+      apiClient(`/homes/${homeId}`, {
+        method: 'DELETE',
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['homes'] });
+      router.push('/');
+    },
+  });
+
+  React.useEffect(() => {
+    if (homeDetails) {
+      setEditHomeName(homeDetails.name || '');
+      setEditHomeDesc(homeDetails.description || '');
+    }
+  }, [homeDetails]);
 
   const deleteExpenseMutation = useMutation({
     mutationFn: (expenseId: string) =>
@@ -391,10 +501,10 @@ export default function HomeDashboardPage() {
           </div>
 
           {/* Mode Switcher Tabs */}
-          <div className="bg-surface-container p-1 rounded-lg flex items-center space-x-1 text-xs">
+          <div className="bg-surface-container p-1 rounded-lg flex items-center space-x-1 text-xs overflow-x-auto no-scrollbar">
             <button
               onClick={() => setActiveTab('expenses')}
-              className={`px-3 py-1 rounded-md transition font-medium ${
+              className={`px-3 py-1 rounded-md transition font-medium shrink-0 ${
                 activeTab === 'expenses'
                   ? 'bg-surface-container-lowest text-on-surface shadow-xs font-semibold'
                   : 'text-on-surface-variant hover:text-on-surface'
@@ -404,7 +514,7 @@ export default function HomeDashboardPage() {
             </button>
             <button
               onClick={() => setActiveTab('balances')}
-              className={`px-3 py-1 rounded-md transition font-medium ${
+              className={`px-3 py-1 rounded-md transition font-medium shrink-0 ${
                 activeTab === 'balances'
                   ? 'bg-surface-container-lowest text-on-surface shadow-xs font-semibold'
                   : 'text-on-surface-variant hover:text-on-surface'
@@ -415,7 +525,7 @@ export default function HomeDashboardPage() {
             {!isBachelor && (
               <button
                 onClick={() => setActiveTab('envelopes')}
-                className={`px-3 py-1 rounded-md transition font-medium ${
+                className={`px-3 py-1 rounded-md transition font-medium shrink-0 ${
                   activeTab === 'envelopes'
                     ? 'bg-surface-container-lowest text-on-surface shadow-xs font-semibold'
                     : 'text-on-surface-variant hover:text-on-surface'
@@ -424,6 +534,26 @@ export default function HomeDashboardPage() {
                 Budget Envelopes
               </button>
             )}
+            <button
+              onClick={() => setActiveTab('members')}
+              className={`px-3 py-1 rounded-md transition font-medium shrink-0 ${
+                activeTab === 'members'
+                  ? 'bg-surface-container-lowest text-on-surface shadow-xs font-semibold'
+                  : 'text-on-surface-variant hover:text-on-surface'
+              }`}
+            >
+              Members ({homeDetails?.members?.length || 0})
+            </button>
+            <button
+              onClick={() => setActiveTab('settings')}
+              className={`px-3 py-1 rounded-md transition font-medium shrink-0 ${
+                activeTab === 'settings'
+                  ? 'bg-surface-container-lowest text-on-surface shadow-xs font-semibold'
+                  : 'text-on-surface-variant hover:text-on-surface'
+              }`}
+            >
+              Settings
+            </button>
           </div>
         </div>
 
@@ -749,6 +879,357 @@ export default function HomeDashboardPage() {
                 <span className="text-[10px] text-secondary font-medium">64% remaining</span>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Tab 4: Members & Invitations Directory */}
+        {activeTab === 'members' && (
+          <div className="space-y-6">
+            <div className="rounded-xl border border-outline-variant/60 bg-surface-container-lowest p-6 shadow-level1 space-y-6">
+              <div className="flex items-center justify-between pb-4 border-b border-outline-variant/40 flex-wrap gap-3">
+                <div>
+                  <h3 className="text-base font-semibold text-on-surface">Household Members</h3>
+                  <p className="text-xs text-on-surface-variant">
+                    Manage active members and role-based permissions for this household.
+                  </p>
+                </div>
+                {(currentMember?.role === MemberRole.OWNER || currentMember?.role === MemberRole.ADMIN) && (
+                  <button
+                    onClick={() => {
+                      setCreatedInviteLink(null);
+                      setShowInvite(true);
+                    }}
+                    className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-primary text-on-primary text-xs font-semibold hover:bg-on-surface-variant transition shadow-sm"
+                  >
+                    <UserPlus className="h-4 w-4" />
+                    <span>Invite Member</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Members List */}
+              <div className="divide-y divide-outline-variant/30">
+                {homeDetails?.members?.map((member: any) => {
+                  const isCurrent = member.userId === user?.id;
+                  const isOwner = member.role === MemberRole.OWNER;
+                  const canManage =
+                    (currentMember?.role === MemberRole.OWNER && !isCurrent) ||
+                    (currentMember?.role === MemberRole.ADMIN && !isCurrent && !isOwner && member.role !== MemberRole.ADMIN);
+
+                  return (
+                    <div key={member.id} className="py-4 flex items-center justify-between gap-4 flex-wrap sm:flex-nowrap">
+                      <div className="flex items-center space-x-3 min-w-0">
+                        <div className="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center font-bold text-sm text-on-surface uppercase shrink-0">
+                          {member.user?.name?.[0] || 'U'}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center space-x-2">
+                            <span className="text-sm font-semibold text-on-surface truncate">
+                              {member.user?.name}
+                            </span>
+                            {isCurrent && (
+                              <span className="text-[10px] bg-secondary-container/50 text-on-secondary-container px-2 py-0.5 rounded-full font-medium">
+                                You
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-on-surface-variant truncate">{member.user?.email}</p>
+                          <p className="text-[11px] text-outline mt-0.5">
+                            Joined {new Date(member.joinedAt).toLocaleDateString()}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center space-x-3">
+                        {/* Role Badge / Dropdown */}
+                        {canManage ? (
+                          <select
+                            value={member.role}
+                            onChange={(e) =>
+                              updateMemberRoleMutation.mutate({
+                                memberId: member.id,
+                                role: e.target.value as MemberRole,
+                              })
+                            }
+                            disabled={updateMemberRoleMutation.isPending}
+                            className="text-xs rounded-lg border border-outline-variant bg-surface-container-low px-2.5 py-1.5 text-on-surface font-medium focus:outline-none"
+                          >
+                            <option value={MemberRole.MEMBER}>Member</option>
+                            <option value={MemberRole.ADMIN}>Admin</option>
+                            <option value={MemberRole.VIEWER}>Viewer</option>
+                          </select>
+                        ) : (
+                          <span
+                            className={`text-xs px-2.5 py-1 rounded-full font-semibold uppercase tracking-wider ${
+                              isOwner
+                                ? 'bg-amber-500/10 text-amber-600 border border-amber-500/30'
+                                : member.role === MemberRole.ADMIN
+                                ? 'bg-primary/10 text-primary border border-primary/30'
+                                : 'bg-surface-container text-on-surface-variant'
+                            }`}
+                          >
+                            {member.role}
+                          </span>
+                        )}
+
+                        {/* Remove / Deactivate Action */}
+                        {canManage && (
+                          <button
+                            onClick={() => {
+                              if (confirm(`Are you sure you want to remove ${member.user?.name}?`)) {
+                                deactivateMemberMutation.mutate(member.id);
+                              }
+                            }}
+                            disabled={deactivateMemberMutation.isPending}
+                            title="Remove member"
+                            className="p-1.5 rounded-lg text-outline hover:text-error hover:bg-error-container/20 transition"
+                          >
+                            <UserMinus className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Pending Invitations Section */}
+            {(currentMember?.role === MemberRole.OWNER || currentMember?.role === MemberRole.ADMIN) && (
+              <div className="rounded-xl border border-outline-variant/60 bg-surface-container-lowest p-6 shadow-level1 space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-outline-variant/40">
+                  <div>
+                    <h3 className="text-sm font-semibold text-on-surface">Pending Invitations</h3>
+                    <p className="text-xs text-on-surface-variant">
+                      Cryptographically signed invite links valid for 7 days.
+                    </p>
+                  </div>
+                  <span className="text-xs text-on-surface-variant tabular-nums">
+                    {homeDetails?.invitations?.length || 0} Pending
+                  </span>
+                </div>
+
+                {(!homeDetails?.invitations || homeDetails.invitations.length === 0) ? (
+                  <p className="text-xs text-on-surface-variant py-3 italic">
+                    No pending invitations for this household.
+                  </p>
+                ) : (
+                  <div className="divide-y divide-outline-variant/30">
+                    {homeDetails.invitations.map((inv: any) => {
+                      const inviteUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/invite/${inv.token}`;
+                      return (
+                        <div key={inv.id} className="py-3 flex items-center justify-between gap-4 flex-wrap sm:flex-nowrap">
+                          <div>
+                            <div className="flex items-center space-x-2">
+                              <span className="text-xs font-semibold text-on-surface">{inv.invitedEmail}</span>
+                              <span className="text-[10px] uppercase font-bold bg-surface-container px-2 py-0.5 rounded-full text-on-surface-variant">
+                                {inv.role}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-outline mt-0.5">
+                              Expires {new Date(inv.expiresAt).toLocaleDateString()}
+                            </p>
+                          </div>
+
+                          <div className="flex items-center space-x-2">
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(inviteUrl);
+                                alert('Invite link copied to clipboard!');
+                              }}
+                              className="flex items-center space-x-1 px-2.5 py-1 rounded-lg border border-outline-variant bg-surface text-xs font-medium text-on-surface hover:bg-surface-container transition"
+                            >
+                              <Copy className="h-3.5 w-3.5" />
+                              <span>Copy Link</span>
+                            </button>
+                            <button
+                              onClick={() => revokeInvitationMutation.mutate(inv.id)}
+                              disabled={revokeInvitationMutation.isPending}
+                              className="px-2.5 py-1 rounded-lg border border-error/30 text-error text-xs font-medium hover:bg-error-container/20 transition"
+                            >
+                              Revoke
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tab 5: Settings & Household Configuration */}
+        {activeTab === 'settings' && (
+          <div className="space-y-6 max-w-3xl">
+            {/* General Settings */}
+            <div className="rounded-xl border border-outline-variant/60 bg-surface-container-lowest p-6 shadow-level1 space-y-6">
+              <div>
+                <h3 className="text-base font-semibold text-on-surface">Household Settings</h3>
+                <p className="text-xs text-on-surface-variant">
+                  Update general information and display properties for this household.
+                </p>
+              </div>
+
+              {settingsSuccess && (
+                <div className="p-3 rounded-lg bg-secondary-container/50 text-on-secondary-container text-xs flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 shrink-0" />
+                  <span>{settingsSuccess}</span>
+                </div>
+              )}
+
+              {settingsError && (
+                <div className="p-3 rounded-lg bg-error-container text-on-error-container text-xs flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  <span>{settingsError}</span>
+                </div>
+              )}
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  setSettingsError(null);
+                  setSettingsSuccess(null);
+                  updateHomeMutation.mutate({
+                    name: editHomeName,
+                    description: editHomeDesc,
+                  });
+                }}
+                className="space-y-4"
+              >
+                <div>
+                  <label className="block text-xs font-semibold text-on-surface mb-1">Home Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={editHomeName}
+                    onChange={(e) => setEditHomeName(e.target.value)}
+                    disabled={currentMember?.role !== MemberRole.OWNER && currentMember?.role !== MemberRole.ADMIN}
+                    className="w-full rounded-lg border border-outline-variant bg-surface-container-low px-3 py-2 text-xs text-on-surface focus:outline-none disabled:opacity-50"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-on-surface mb-1">Description</label>
+                  <textarea
+                    rows={3}
+                    value={editHomeDesc}
+                    onChange={(e) => setEditHomeDesc(e.target.value)}
+                    disabled={currentMember?.role !== MemberRole.OWNER && currentMember?.role !== MemberRole.ADMIN}
+                    placeholder="Brief description of this home or flat..."
+                    className="w-full rounded-lg border border-outline-variant bg-surface-container-low px-3 py-2 text-xs text-on-surface focus:outline-none disabled:opacity-50"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                  <div className="p-3 rounded-lg bg-surface-container border border-outline-variant/40 space-y-1">
+                    <span className="text-[11px] font-semibold text-on-surface-variant uppercase tracking-wider">
+                      Base Currency
+                    </span>
+                    <p className="text-sm font-bold text-on-surface">{homeDetails?.currency || 'USD'}</p>
+                    <p className="text-[11px] text-outline">Immutable ledger base unit.</p>
+                  </div>
+
+                  <div className="p-3 rounded-lg bg-surface-container border border-outline-variant/40 space-y-1">
+                    <span className="text-[11px] font-semibold text-on-surface-variant uppercase tracking-wider">
+                      Operating Archetype
+                    </span>
+                    <p className="text-sm font-bold text-on-surface">
+                      {isBachelor ? 'Bachelor Flat' : 'Family Household'}
+                    </p>
+                    <p className="text-[11px] text-outline">
+                      {isBachelor ? 'Pairwise split engine & bilateral settlement' : 'Pooled ledger & budget envelope rail'}
+                    </p>
+                  </div>
+                </div>
+
+                {(currentMember?.role === MemberRole.OWNER || currentMember?.role === MemberRole.ADMIN) && (
+                  <div className="pt-2">
+                    <button
+                      type="submit"
+                      disabled={updateHomeMutation.isPending}
+                      className="px-4 py-2 rounded-xl bg-primary text-on-primary text-xs font-semibold hover:bg-on-surface-variant transition disabled:opacity-50"
+                    >
+                      {updateHomeMutation.isPending ? 'Saving...' : 'Save Settings'}
+                    </button>
+                  </div>
+                )}
+              </form>
+            </div>
+
+            {/* Lifecycle & Danger Zone */}
+            {currentMember?.role === MemberRole.OWNER && (
+              <div className="rounded-xl border border-error/30 bg-surface-container-lowest p-6 shadow-level1 space-y-6">
+                <div>
+                  <h3 className="text-base font-semibold text-error">Lifecycle & Danger Zone</h3>
+                  <p className="text-xs text-on-surface-variant">
+                    Owner-restricted administrative actions.
+                  </p>
+                </div>
+
+                <div className="divide-y divide-outline-variant/30">
+                  {/* Archive / Restore */}
+                  <div className="py-4 flex items-center justify-between gap-4">
+                    <div>
+                      <h4 className="text-xs font-semibold text-on-surface">
+                        {homeDetails?.isArchived ? 'Restore Home' : 'Archive Home'}
+                      </h4>
+                      <p className="text-[11px] text-on-surface-variant">
+                        {homeDetails?.isArchived
+                          ? 'Unarchive this household to resume expense logging and balance reconciliation.'
+                          : 'Mark this household read-only. Members cannot log new expenses while archived.'}
+                      </p>
+                    </div>
+                    {homeDetails?.isArchived ? (
+                      <button
+                        onClick={() => restoreHomeMutation.mutate()}
+                        disabled={restoreHomeMutation.isPending}
+                        className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-outline-variant bg-surface text-xs font-semibold text-on-surface hover:bg-surface-container transition"
+                      >
+                        <RotateCcw className="h-4 w-4" />
+                        <span>Restore</span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          if (confirm('Archive this home? Transactions will become read-only.')) {
+                            archiveHomeMutation.mutate();
+                          }
+                        }}
+                        disabled={archiveHomeMutation.isPending}
+                        className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-outline-variant bg-surface text-xs font-semibold text-on-surface hover:bg-surface-container transition"
+                      >
+                        <Archive className="h-4 w-4" />
+                        <span>Archive</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Delete Home */}
+                  <div className="py-4 flex items-center justify-between gap-4">
+                    <div>
+                      <h4 className="text-xs font-semibold text-error">Permanently Delete Home</h4>
+                      <p className="text-[11px] text-on-surface-variant">
+                        Permanently purge this household, memberships, and transaction history. Cannot be undone.
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        if (confirm('Are you absolutely sure you want to permanently delete this home? This action CANNOT be undone.')) {
+                          deleteHomeMutation.mutate();
+                        }
+                      }}
+                      disabled={deleteHomeMutation.isPending}
+                      className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-error text-on-error text-xs font-semibold hover:bg-error/90 transition disabled:opacity-50"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      <span>{deleteHomeMutation.isPending ? 'Deleting...' : 'Delete Home'}</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </main>
@@ -1143,9 +1624,15 @@ export default function HomeDashboardPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-2xl border border-outline-variant/60 bg-surface p-6 shadow-level3 space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-outline-variant/40">
-              <h3 className="text-base font-semibold text-on-surface">Invite Member</h3>
+              <h3 className="text-base font-semibold text-on-surface">
+                {createdInviteLink ? 'Invitation Ready' : 'Invite Member'}
+              </h3>
               <button
-                onClick={() => setShowInvite(false)}
+                onClick={() => {
+                  setShowInvite(false);
+                  setCreatedInviteLink(null);
+                  setCopiedLink(false);
+                }}
                 className="w-8 h-8 rounded-lg flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition"
               >
                 ✕
@@ -1158,40 +1645,92 @@ export default function HomeDashboardPage() {
               </div>
             )}
 
-            <form onSubmit={handleInviteSubmit} className="space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-on-surface mb-1">Email Address</label>
-                <input
-                  type="email"
-                  required
-                  value={inviteEmail}
-                  onChange={(e) => setInviteEmail(e.target.value)}
-                  placeholder="roommate@domain.com"
-                  className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-xs text-on-surface focus:outline-none"
-                />
-              </div>
+            {createdInviteLink ? (
+              <div className="space-y-4 py-2">
+                <div className="p-3 rounded-xl bg-secondary-container/30 border border-secondary/20 flex items-start gap-3">
+                  <CheckCircle2 className="h-5 w-5 text-secondary shrink-0 mt-0.5" />
+                  <div className="text-xs space-y-1">
+                    <p className="font-semibold text-on-surface">Invitation link generated!</p>
+                    <p className="text-on-surface-variant">
+                      Share this single-use link with the person you want to invite. It is valid for 7 days.
+                    </p>
+                  </div>
+                </div>
 
-              <div>
-                <label className="block text-xs font-medium text-on-surface mb-1">Role</label>
-                <select
-                  value={inviteRole}
-                  onChange={(e) => setInviteRole(e.target.value as MemberRole)}
-                  className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-xs text-on-surface focus:outline-none"
+                <div>
+                  <label className="block text-[11px] font-semibold text-on-surface-variant uppercase tracking-wider mb-1">
+                    Direct Invitation URL
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={createdInviteLink}
+                      className="w-full rounded-lg border border-outline-variant bg-surface-container-low px-3 py-2 text-xs text-on-surface font-mono select-all focus:outline-none"
+                    />
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(createdInviteLink);
+                        setCopiedLink(true);
+                        setTimeout(() => setCopiedLink(false), 2500);
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-on-primary text-xs font-semibold hover:bg-on-surface-variant transition shrink-0"
+                    >
+                      {copiedLink ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                      <span>{copiedLink ? 'Copied' : 'Copy'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    onClick={() => {
+                      setShowInvite(false);
+                      setCreatedInviteLink(null);
+                      setCopiedLink(false);
+                    }}
+                    className="w-full h-10 rounded-xl bg-surface-container text-on-surface font-semibold text-xs hover:bg-surface-container-high transition"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleInviteSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-medium text-on-surface mb-1">Email Address</label>
+                  <input
+                    type="email"
+                    required
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                    placeholder="roommate@domain.com"
+                    className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-xs text-on-surface focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-on-surface mb-1">Role</label>
+                  <select
+                    value={inviteRole}
+                    onChange={(e) => setInviteRole(e.target.value as MemberRole)}
+                    className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-xs text-on-surface focus:outline-none"
+                  >
+                    <option value={MemberRole.MEMBER}>MEMBER (Can log expenses & settle)</option>
+                    <option value={MemberRole.ADMIN}>ADMIN (Can manage members)</option>
+                    <option value={MemberRole.VIEWER}>VIEWER (Read-only)</option>
+                  </select>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={inviteMemberMutation.isPending}
+                  className="w-full h-11 rounded-xl bg-primary text-on-primary font-semibold text-xs hover:bg-on-surface-variant transition disabled:opacity-40"
                 >
-                  <option value={MemberRole.MEMBER}>MEMBER (Can log expenses & settle)</option>
-                  <option value={MemberRole.ADMIN}>ADMIN (Can manage members)</option>
-                  <option value={MemberRole.VIEWER}>VIEWER (Read-only)</option>
-                </select>
-              </div>
-
-              <button
-                type="submit"
-                disabled={inviteMemberMutation.isPending}
-                className="w-full h-11 rounded-xl bg-primary text-on-primary font-semibold text-xs hover:bg-on-surface-variant transition disabled:opacity-40"
-              >
-                Send Invitation
-              </button>
-            </form>
+                  {inviteMemberMutation.isPending ? 'Generating Link...' : 'Generate Invitation'}
+                </button>
+              </form>
+            )}
           </div>
         </div>
       )}

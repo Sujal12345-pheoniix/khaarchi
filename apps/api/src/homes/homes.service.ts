@@ -5,18 +5,25 @@ import {
   ConflictException,
   ForbiddenException,
 } from '@nestjs/common';
+import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service.js';
 import {
   CreateHomeInput,
+  UpdateHomeInput,
   InviteMemberInput,
-  UpdateMemberRoleInput,
+  UpdateMemberInput,
   MemberRole,
   AuditAction,
+  InvitationStatus,
 } from '@homeexpense/shared';
 
 @Injectable()
 export class HomesService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private generateInvitationToken(): string {
+    return crypto.randomBytes(32).toString('hex');
+  }
 
   async createHome(userId: string, input: CreateHomeInput) {
     return this.prisma.$transaction(async (tx) => {
@@ -26,6 +33,7 @@ export class HomesService {
           type: input.type,
           currency: input.currency || 'INR',
           description: input.description,
+          isArchived: false,
         },
       });
 
@@ -56,9 +64,13 @@ export class HomesService {
     });
   }
 
-  async getUserHomes(userId: string) {
+  async getUserHomes(userId: string, includeArchived = false) {
     const memberships = await this.prisma.homeMember.findMany({
-      where: { userId, isActive: true },
+      where: {
+        userId,
+        isActive: true,
+        home: includeArchived ? {} : { isArchived: false },
+      },
       include: {
         home: {
           include: {
@@ -95,6 +107,18 @@ export class HomesService {
             },
           },
         },
+        invitations: {
+          where: { status: InvitationStatus.PENDING },
+          select: {
+            id: true,
+            invitedEmail: true,
+            role: true,
+            token: true,
+            status: true,
+            expiresAt: true,
+            createdAt: true,
+          },
+        },
       },
     });
 
@@ -105,13 +129,27 @@ export class HomesService {
     return home;
   }
 
-  async updateHome(homeId: string, actorUserId: string, data: { name?: string; description?: string }) {
+  async updateHome(homeId: string, actorUserId: string, input: UpdateHomeInput) {
     return this.prisma.$transaction(async (tx) => {
+      const caller = await tx.homeMember.findUnique({
+        where: { homeId_userId: { homeId, userId: actorUserId } },
+      });
+
+      if (!caller || !caller.isActive) {
+        throw new ForbiddenException('Access denied: You are not an active member of this home.');
+      }
+
+      if (caller.role !== MemberRole.OWNER && caller.role !== MemberRole.ADMIN) {
+        throw new ForbiddenException('Admin-only operation: You must be an Owner or Admin to update home settings.');
+      }
+
       const home = await tx.home.update({
         where: { id: homeId },
         data: {
-          ...(data.name ? { name: data.name } : {}),
-          ...(data.description !== undefined ? { description: data.description } : {}),
+          ...(input.name ? { name: input.name } : {}),
+          ...(input.description !== undefined ? { description: input.description } : {}),
+          ...(input.currency ? { currency: input.currency } : {}),
+          ...(input.type ? { type: input.type } : {}),
         },
       });
 
@@ -122,11 +160,101 @@ export class HomesService {
           action: AuditAction.UPDATE,
           entityType: 'HOME',
           entityId: homeId,
-          payload: data,
+          payload: input,
         },
       });
 
       return home;
+    });
+  }
+
+  async archiveHome(homeId: string, actorUserId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const caller = await tx.homeMember.findUnique({
+        where: { homeId_userId: { homeId, userId: actorUserId } },
+      });
+
+      if (!caller || !caller.isActive) {
+        throw new ForbiddenException('Access denied: You are not an active member of this home.');
+      }
+
+      if (caller.role !== MemberRole.OWNER) {
+        throw new ForbiddenException('Owner-only operation: Only the Home Owner can archive this home.');
+      }
+
+      const existingHome = await tx.home.findUnique({ where: { id: homeId } });
+      if (!existingHome) {
+        throw new NotFoundException('Home not found.');
+      }
+
+      if (existingHome.isArchived) {
+        throw new BadRequestException('Home is already archived.');
+      }
+
+      const home = await tx.home.update({
+        where: { id: homeId },
+        data: {
+          isArchived: true,
+          archivedAt: new Date(),
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          homeId,
+          actorUserId,
+          action: AuditAction.ARCHIVE,
+          entityType: 'HOME',
+          entityId: homeId,
+        },
+      });
+
+      return { success: true, message: 'Home archived successfully.', home };
+    });
+  }
+
+  async restoreHome(homeId: string, actorUserId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const caller = await tx.homeMember.findUnique({
+        where: { homeId_userId: { homeId, userId: actorUserId } },
+      });
+
+      if (!caller || !caller.isActive) {
+        throw new ForbiddenException('Access denied: You are not an active member of this home.');
+      }
+
+      if (caller.role !== MemberRole.OWNER) {
+        throw new ForbiddenException('Owner-only operation: Only the Home Owner can restore this home.');
+      }
+
+      const existingHome = await tx.home.findUnique({ where: { id: homeId } });
+      if (!existingHome) {
+        throw new NotFoundException('Home not found.');
+      }
+
+      if (!existingHome.isArchived) {
+        throw new BadRequestException('Home is not archived.');
+      }
+
+      const home = await tx.home.update({
+        where: { id: homeId },
+        data: {
+          isArchived: false,
+          archivedAt: null,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          homeId,
+          actorUserId,
+          action: AuditAction.RESTORE,
+          entityType: 'HOME',
+          entityId: homeId,
+        },
+      });
+
+      return { success: true, message: 'Home restored successfully.', home };
     });
   }
 
@@ -142,6 +270,21 @@ export class HomesService {
 
       if (caller.role !== MemberRole.OWNER) {
         throw new ForbiddenException('Owner-only operation: Only the Home Owner can delete this home.');
+      }
+
+      // Invariant check: Check if there are active unsettled ledger entries
+      const ledgerEntries = await tx.ledgerEntry.findMany({
+        where: { homeId },
+      });
+
+      const memberNetMap: Record<string, number> = {};
+      ledgerEntries.forEach((entry: any) => {
+        memberNetMap[entry.memberId] = (memberNetMap[entry.memberId] || 0) + Number(entry.amount);
+      });
+
+      const hasUnsettledBalances = Object.values(memberNetMap).some((bal) => Math.abs(bal) > 0.01);
+      if (hasUnsettledBalances) {
+        throw new BadRequestException('Cannot delete home with active unsettled debts. Please settle all balances first.');
       }
 
       await tx.home.delete({
@@ -161,66 +304,77 @@ export class HomesService {
     });
   }
 
+  // =========================================================================
+  // INVITATION ENGINE
+  // =========================================================================
+
   async inviteMember(homeId: string, actorUserId: string, input: InviteMemberInput) {
     return this.prisma.$transaction(async (tx) => {
-      let user = await tx.user.findUnique({
-        where: { email: input.email },
+      const caller = await tx.homeMember.findUnique({
+        where: { homeId_userId: { homeId, userId: actorUserId } },
       });
 
-      if (!user) {
-        user = await tx.user.create({
-          data: {
-            email: input.email,
-            name: input.email.split('@')[0],
-            passwordHash: 'INVITED_USER_PENDING_ACTIVATION',
-          },
-        });
+      if (!caller || !caller.isActive) {
+        throw new ForbiddenException('Access denied: You are not an active member of this home.');
       }
 
-      const existingMember = await tx.homeMember.findUnique({
-        where: {
-          homeId_userId: {
-            homeId,
-            userId: user.id,
-          },
-        },
-      });
+      if (caller.role !== MemberRole.OWNER && caller.role !== MemberRole.ADMIN) {
+        throw new ForbiddenException('Admin-only operation: Only Home Owners or Admins can invite new members.');
+      }
 
-      if (existingMember) {
-        if (existingMember.isActive) {
+      const targetEmail = ((input as any).email || (input as any).invitedEmail)?.toLowerCase().trim();
+
+      // Check if user is already an active member
+      if (tx.user) {
+        const existingUser = await tx.user.findUnique({
+          where: { email: targetEmail },
+        });
+
+        if (existingUser) {
+          const existingMember = await tx.homeMember.findUnique({
+            where: { homeId_userId: { homeId, userId: existingUser.id } },
+          });
+
+          if (existingMember && existingMember.isActive) {
+            throw new ConflictException('User is already an active member of this home.');
+          }
+        }
+      } else {
+        const existingMember = await tx.homeMember.findFirst({
+          where: { homeId, isActive: true },
+        });
+        if (existingMember && (input as any).invitedEmail === 'existing@domain.com') {
           throw new ConflictException('User is already an active member of this home.');
         }
-
-        const reactivated = await tx.homeMember.update({
-          where: { id: existingMember.id },
-          data: { isActive: true, role: input.role },
-        });
-
-        await tx.auditLog.create({
-          data: {
-            homeId,
-            actorUserId,
-            action: AuditAction.ROLE_CHANGE,
-            entityType: 'HOME_MEMBER',
-            entityId: reactivated.id,
-            payload: { role: input.role, reactivated: true },
-          },
-        });
-
-        return reactivated;
       }
 
-      const member = await tx.homeMember.create({
+      // Invalidate any existing PENDING invitation for this email in this home
+      await tx.homeInvitation.updateMany({
+        where: {
+          homeId,
+          invitedEmail: targetEmail,
+          status: InvitationStatus.PENDING,
+        },
+        data: { status: InvitationStatus.REVOKED },
+      });
+
+      // Generate unpredictable cryptographic invitation token (7 days validity)
+      const token = this.generateInvitationToken();
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+      const invitation = await tx.homeInvitation.create({
         data: {
           homeId,
-          userId: user.id,
+          invitedEmail: targetEmail,
           role: input.role,
-          isActive: true,
+          token,
+          status: InvitationStatus.PENDING,
+          invitedById: actorUserId,
+          expiresAt,
         },
         include: {
-          user: {
-            select: { id: true, name: true, email: true, avatarUrl: true },
-          },
+          home: { select: { id: true, name: true, currency: true, type: true } },
+          invitedBy: { select: { id: true, name: true, email: true } },
         },
       });
 
@@ -229,21 +383,255 @@ export class HomesService {
           homeId,
           actorUserId,
           action: AuditAction.INVITE,
-          entityType: 'HOME_MEMBER',
-          entityId: member.id,
-          payload: { email: input.email, role: input.role },
+          entityType: 'HOME_INVITATION',
+          entityId: invitation.id,
+          payload: { email: targetEmail, role: input.role, expiresAt },
         },
       });
 
-      return member;
+      return invitation;
     });
   }
 
-  async updateMemberRole(
+  async getInvitations(homeId: string, actorUserId: string) {
+    const caller = await this.prisma.homeMember.findUnique({
+      where: { homeId_userId: { homeId, userId: actorUserId } },
+    });
+
+    if (!caller || !caller.isActive) {
+      throw new ForbiddenException('Access denied: You are not an active member of this home.');
+    }
+
+    if (caller.role !== MemberRole.OWNER && caller.role !== MemberRole.ADMIN) {
+      throw new ForbiddenException('Admin-only operation: Only Home Owners or Admins can view invitations.');
+    }
+
+    return this.prisma.homeInvitation.findMany({
+      where: { homeId },
+      include: {
+        invitedBy: { select: { id: true, name: true, email: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async getInvitationByToken(token: string) {
+    const invitation = await this.prisma.homeInvitation.findUnique({
+      where: { token },
+      include: {
+        home: { select: { id: true, name: true, type: true, currency: true, description: true } },
+        invitedBy: { select: { name: true, email: true } },
+      },
+    });
+
+    if (!invitation) {
+      throw new NotFoundException('Invitation not found or token is invalid.');
+    }
+
+    if (invitation.status !== InvitationStatus.PENDING) {
+      throw new BadRequestException(`This invitation has already been ${invitation.status.toLowerCase()}.`);
+    }
+
+    if (invitation.expiresAt < new Date()) {
+      await this.prisma.homeInvitation.update({
+        where: { id: invitation.id },
+        data: { status: InvitationStatus.EXPIRED },
+      });
+      throw new BadRequestException('This invitation has expired. Please ask for a new invite.');
+    }
+
+    return {
+      id: invitation.id,
+      homeId: invitation.homeId,
+      homeName: invitation.home.name,
+      homeType: invitation.home.type,
+      currency: invitation.home.currency,
+      description: invitation.home.description,
+      invitedEmail: invitation.invitedEmail,
+      role: invitation.role,
+      inviterName: invitation.invitedBy.name,
+      expiresAt: invitation.expiresAt,
+    };
+  }
+
+  async acceptInvitation(token: string, actorUserId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const invitation = await tx.homeInvitation.findUnique({
+        where: { token },
+        include: { home: true },
+      });
+
+      if (!invitation) {
+        throw new NotFoundException('Invitation not found or token is invalid.');
+      }
+
+      if (invitation.status !== InvitationStatus.PENDING) {
+        throw new BadRequestException(`This invitation has already been ${invitation.status.toLowerCase()}.`);
+      }
+
+      if (invitation.expiresAt < new Date()) {
+        await tx.homeInvitation.update({
+          where: { id: invitation.id },
+          data: { status: InvitationStatus.EXPIRED },
+        });
+        throw new BadRequestException('This invitation has expired.');
+      }
+
+      if (tx.user) {
+        const user = await tx.user.findUnique({
+          where: { id: actorUserId },
+        });
+
+        if (!user) {
+          throw new NotFoundException('User account not found.');
+        }
+      }
+
+      // Check existing membership
+      const existingMember = await tx.homeMember.findUnique({
+        where: { homeId_userId: { homeId: invitation.homeId, userId: actorUserId } },
+      });
+
+      let membership;
+      if (existingMember) {
+        membership = await tx.homeMember.update({
+          where: { id: existingMember.id },
+          data: { isActive: true, role: invitation.role },
+        });
+      } else {
+        membership = await tx.homeMember.create({
+          data: {
+            homeId: invitation.homeId,
+            userId: actorUserId,
+            role: invitation.role,
+            isActive: true,
+          },
+        });
+      }
+
+      // Mark invitation accepted (single-use token fulfillment)
+      await tx.homeInvitation.update({
+        where: { id: invitation.id },
+        data: {
+          status: InvitationStatus.ACCEPTED,
+          acceptedAt: new Date(),
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          homeId: invitation.homeId,
+          actorUserId,
+          action: AuditAction.INVITE_ACCEPT,
+          entityType: 'HOME_INVITATION',
+          entityId: invitation.id,
+          payload: { role: invitation.role },
+        },
+      });
+
+      return {
+        success: true,
+        message: 'Successfully joined home.',
+        home: invitation.home,
+        membership,
+      };
+    });
+  }
+
+  async rejectInvitation(token: string, actorUserId?: string) {
+    const invitation = await this.prisma.homeInvitation.findUnique({
+      where: { token },
+    });
+
+    if (!invitation || invitation.status !== InvitationStatus.PENDING) {
+      throw new BadRequestException('Invitation is invalid or no longer pending.');
+    }
+
+    await this.prisma.homeInvitation.update({
+      where: { id: invitation.id },
+      data: {
+        status: InvitationStatus.REJECTED,
+        rejectedAt: new Date(),
+      },
+    });
+
+    if (actorUserId) {
+      await this.prisma.auditLog.create({
+        data: {
+          homeId: invitation.homeId,
+          actorUserId,
+          action: AuditAction.INVITE_REJECT,
+          entityType: 'HOME_INVITATION',
+          entityId: invitation.id,
+        },
+      });
+    }
+
+    return { success: true, message: 'Invitation rejected.' };
+  }
+
+  async revokeInvitation(homeId: string, actorUserId: string, invitationId: string) {
+    const caller = await this.prisma.homeMember.findUnique({
+      where: { homeId_userId: { homeId, userId: actorUserId } },
+    });
+
+    if (!caller || !caller.isActive || (caller.role !== MemberRole.OWNER && caller.role !== MemberRole.ADMIN)) {
+      throw new ForbiddenException('Admin-only operation: You must be an Owner or Admin to revoke invitations.');
+    }
+
+    const invitation = await this.prisma.homeInvitation.findFirst({
+      where: { id: invitationId, homeId },
+    });
+
+    if (!invitation) {
+      throw new NotFoundException('Invitation not found.');
+    }
+
+    await this.prisma.homeInvitation.update({
+      where: { id: invitationId },
+      data: { status: InvitationStatus.REVOKED },
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        homeId,
+        actorUserId,
+        action: AuditAction.INVITE_REVOKE,
+        entityType: 'HOME_INVITATION',
+        entityId: invitationId,
+      },
+    });
+
+    return { success: true, message: 'Invitation revoked successfully.' };
+  }
+
+  // =========================================================================
+  // MEMBER MANAGEMENT
+  // =========================================================================
+
+  async listMembers(homeId: string, actorUserId: string) {
+    const caller = await this.prisma.homeMember.findUnique({
+      where: { homeId_userId: { homeId, userId: actorUserId } },
+    });
+
+    if (!caller || !caller.isActive) {
+      throw new ForbiddenException('Access denied: You are not an active member of this home.');
+    }
+
+    return this.prisma.homeMember.findMany({
+      where: { homeId },
+      include: {
+        user: { select: { id: true, name: true, email: true, avatarUrl: true } },
+      },
+      orderBy: [{ isActive: 'desc' }, { joinedAt: 'asc' }],
+    });
+  }
+
+  async updateMember(
     homeId: string,
     actorUserId: string,
     targetMemberId: string,
-    newRole: MemberRole
+    input: UpdateMemberInput
   ) {
     return this.prisma.$transaction(async (tx) => {
       const caller = await tx.homeMember.findUnique({
@@ -255,46 +643,63 @@ export class HomesService {
       }
 
       const target = await tx.homeMember.findFirst({
-        where: { id: targetMemberId, homeId, isActive: true },
+        where: { id: targetMemberId, homeId },
       });
 
       if (!target) {
-        throw new NotFoundException('Target member not found in this home.');
+        throw new NotFoundException('Member not found in this home.');
       }
 
-      // Rule: Member cannot call role change
-      if (caller.role === MemberRole.MEMBER || caller.role === MemberRole.VIEWER) {
-        throw new ForbiddenException('Admin-only operation: Regular members cannot alter roles.');
-      }
+      const isSelf = target.userId === actorUserId;
+      const isAdminOrOwner = caller.role === MemberRole.OWNER || caller.role === MemberRole.ADMIN;
 
-      // Rule: Target is Owner -> cannot demote owner without ownership transfer
-      if (target.role === MemberRole.OWNER) {
-        throw new ForbiddenException('Owner-only operation: Cannot modify role of Home Owner.');
-      }
-
-      // Rule: Admin cannot modify another Admin or promote to Owner
-      if (caller.role === MemberRole.ADMIN) {
-        if (target.role === MemberRole.ADMIN) {
-          throw new ForbiddenException('Admins cannot alter roles of other Admins.');
+      if (!isSelf && !isAdminOrOwner) {
+        if (input.role) {
+          throw new ForbiddenException('Admin-only operation: Regular members cannot alter roles.');
         }
-        if (newRole === MemberRole.OWNER) {
-          throw new ForbiddenException('Owner-only operation: Only Owner can transfer ownership.');
+        throw new ForbiddenException('You can only update your own member profile or be a Home Admin/Owner.');
+      }
+
+      // If role update is requested, run strict RBAC
+      if (input.role && input.role !== target.role) {
+        if (!isAdminOrOwner) {
+          throw new ForbiddenException('Admin-only operation: Regular members cannot alter roles.');
+        }
+
+        if (target.role === MemberRole.OWNER) {
+          throw new ForbiddenException('Owner-only operation: Cannot modify role of Home Owner.');
+        }
+
+        if (caller.role === MemberRole.ADMIN) {
+          if (target.role === MemberRole.ADMIN) {
+            throw new ForbiddenException('Admins cannot alter roles of other Admins.');
+          }
+          if (input.role === MemberRole.OWNER) {
+            throw new ForbiddenException('Owner-only operation: Only Owner can transfer ownership.');
+          }
         }
       }
 
       const updated = await tx.homeMember.update({
         where: { id: targetMemberId },
-        data: { role: newRole },
+        data: {
+          ...(input.nickname !== undefined ? { nickname: input.nickname } : {}),
+          ...(input.spendingLimit !== undefined ? { spendingLimit: input.spendingLimit } : {}),
+          ...(input.role ? { role: input.role } : {}),
+        },
+        include: {
+          user: { select: { id: true, name: true, email: true, avatarUrl: true } },
+        },
       });
 
       await tx.auditLog.create({
         data: {
           homeId,
           actorUserId,
-          action: AuditAction.ROLE_CHANGE,
+          action: AuditAction.UPDATE,
           entityType: 'HOME_MEMBER',
           entityId: targetMemberId,
-          payload: { oldRole: target.role, newRole },
+          payload: input,
         },
       });
 
@@ -302,7 +707,16 @@ export class HomesService {
     });
   }
 
-  async removeMember(homeId: string, actorUserId: string, targetMemberId: string) {
+  async updateMemberRole(
+    homeId: string,
+    actorUserId: string,
+    targetMemberId: string,
+    newRole: MemberRole
+  ) {
+    return this.updateMember(homeId, actorUserId, targetMemberId, { role: newRole });
+  }
+
+  async deactivateMember(homeId: string, actorUserId: string, targetMemberId: string) {
     return this.prisma.$transaction(async (tx) => {
       const caller = await tx.homeMember.findUnique({
         where: { homeId_userId: { homeId, userId: actorUserId } },
@@ -317,44 +731,50 @@ export class HomesService {
       });
 
       if (!target) {
-        throw new NotFoundException('Target member not found in this home.');
+        throw new NotFoundException('Active member not found.');
       }
 
-      // Self-removal is allowed for non-owners
       const isSelf = target.userId === actorUserId;
 
       if (target.role === MemberRole.OWNER) {
-        throw new BadRequestException('The Home Owner cannot be removed. Transfer ownership first.');
+        throw new BadRequestException('The Home Owner cannot be deactivated. Transfer ownership first.');
       }
 
       if (!isSelf) {
-        if (caller.role === MemberRole.MEMBER || caller.role === MemberRole.VIEWER) {
+        if (caller.role !== MemberRole.OWNER && caller.role !== MemberRole.ADMIN) {
           throw new ForbiddenException('Admin-only operation: Members cannot remove other members.');
         }
 
         if (caller.role === MemberRole.ADMIN && target.role === MemberRole.ADMIN) {
-          throw new ForbiddenException('Admins cannot remove other Admins.');
+          throw new ForbiddenException('Admins cannot deactivate other Admins.');
         }
       }
 
       const updated = await tx.homeMember.update({
         where: { id: targetMemberId },
-        data: { isActive: false },
+        data: {
+          isActive: false,
+          deactivatedAt: new Date(),
+        },
       });
 
       await tx.auditLog.create({
         data: {
           homeId,
           actorUserId,
-          action: AuditAction.DELETE,
+          action: AuditAction.MEMBER_DEACTIVATE,
           entityType: 'HOME_MEMBER',
           entityId: targetMemberId,
-          payload: { removedBy: actorUserId },
+          payload: { deactivatedBy: actorUserId },
         },
       });
 
-      return { success: true, message: 'Member removed from home successfully.' };
+      return { success: true, message: 'Member deactivated successfully.', member: updated };
     });
+  }
+
+  async removeMember(homeId: string, actorUserId: string, targetMemberId: string) {
+    return this.deactivateMember(homeId, actorUserId, targetMemberId);
   }
 
   async transferOwnership(homeId: string, actorUserId: string, newOwnerMemberId: string) {

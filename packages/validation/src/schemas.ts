@@ -54,9 +54,26 @@ export const CreateHomeSchema = z.object({
   description: z.string().max(250).optional(),
 });
 
+export const UpdateHomeSchema = z.object({
+  name: z.string().min(2, 'Home name must be at least 2 characters').max(50).trim().optional(),
+  type: z.nativeEnum(HomeType).optional(),
+  currency: z.string().length(3).optional(),
+  description: z.string().max(250).nullable().optional(),
+});
+
 export const InviteMemberSchema = z.object({
   email: z.string().email('Invalid email address').toLowerCase().trim(),
   role: z.nativeEnum(MemberRole).default(MemberRole.MEMBER),
+});
+
+export const AcceptInvitationSchema = z.object({
+  token: z.string().min(1, 'Invitation token is required'),
+});
+
+export const UpdateMemberSchema = z.object({
+  nickname: z.string().max(50).nullable().optional(),
+  spendingLimit: z.number().positive().nullable().optional(),
+  role: z.nativeEnum(MemberRole).optional(),
 });
 
 // Split Item Schema
@@ -150,7 +167,10 @@ export type UpdateProfileInput = z.infer<typeof UpdateProfileSchema>;
 export type VerifyEmailInput = z.infer<typeof VerifyEmailSchema>;
 export type UpdateMemberRoleInput = z.infer<typeof UpdateMemberRoleSchema>;
 export type CreateHomeInput = z.infer<typeof CreateHomeSchema>;
+export type UpdateHomeInput = z.infer<typeof UpdateHomeSchema>;
 export type InviteMemberInput = z.infer<typeof InviteMemberSchema>;
+export type AcceptInvitationInput = z.infer<typeof AcceptInvitationSchema>;
+export type UpdateMemberInput = z.infer<typeof UpdateMemberSchema>;
 export type SplitItemInput = z.infer<typeof SplitItemSchema>;
 export type CreateExpenseInput = z.infer<typeof CreateExpenseSchema>;
 export type CreateSettlementInput = z.infer<typeof CreateSettlementSchema>;
