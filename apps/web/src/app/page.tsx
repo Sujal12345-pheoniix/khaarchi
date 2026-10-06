@@ -15,6 +15,8 @@ import {
   ArrowRight,
   ShieldCheck,
   Loader2,
+  CheckCircle2,
+  Layers,
 } from 'lucide-react';
 import { HomeType } from '@homeexpense/shared';
 
@@ -79,58 +81,70 @@ export default function HomesHubPage() {
 
   if (authLoading || (!token && authLoading)) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
+      <div className="flex min-h-screen items-center justify-center bg-surface-canvas">
+        <Loader2 className="h-7 w-7 animate-spin text-ink" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background text-slate-100">
-      {/* Top Navbar */}
-      <header className="border-b border-surface-border bg-surface/80 backdrop-blur sticky top-0 z-10">
+    <div className="min-h-screen bg-surface-canvas text-on-surface font-sans antialiased">
+      {/* Editorial Top Navigation */}
+      <header className="sticky top-0 z-30 border-b border-outline-variant/60 bg-surface-canvas/90 backdrop-blur-md">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-600 text-white font-bold">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-ink text-white font-bold text-sm tracking-tight shadow-elevation-1">
               HE
             </div>
-            <span className="font-bold tracking-tight text-white text-lg">HomeExpense</span>
+            <div>
+              <span className="font-bold tracking-tight text-ink text-base">HomeExpense</span>
+              <span className="ml-2 text-[11px] font-medium tracking-wide uppercase px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant">
+                Equilibrium OS
+              </span>
+            </div>
           </div>
 
           <div className="flex items-center space-x-4">
             <div className="text-right hidden sm:block">
-              <p className="text-sm font-medium text-white">{user?.name}</p>
-              <p className="text-xs text-slate-400">{user?.email}</p>
+              <p className="text-xs font-semibold text-ink">{user?.name}</p>
+              <p className="text-[11px] text-on-surface-variant font-mono">{user?.email}</p>
             </div>
             <button
               onClick={() => {
                 logout();
                 router.push('/login');
               }}
-              className="flex items-center space-x-1 rounded-lg border border-surface-border px-3 py-1.5 text-xs text-slate-400 hover:bg-surface-elevated hover:text-white transition"
+              className="flex items-center space-x-1.5 rounded-full border border-outline-variant bg-surface-container-lowest px-3 py-1.5 text-xs font-medium text-on-surface-variant hover:text-ink hover:border-outline transition shadow-sm"
             >
               <LogOut className="h-3.5 w-3.5" />
-              <span>Logout</span>
+              <span>Sign out</span>
             </button>
           </div>
         </div>
       </header>
 
       {/* Main Container */}
-      <main className="max-w-6xl mx-auto px-4 py-8">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+      <main className="max-w-6xl mx-auto px-4 py-10">
+        {/* Header Hero Section */}
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8 pb-6 border-b border-outline-variant/60">
           <div>
-            <h2 className="text-2xl font-bold tracking-tight text-white">Your Homes</h2>
-            <p className="text-sm text-slate-400 mt-1">
-              Select an existing home financial environment or establish a new one.
+            <div className="flex items-center space-x-2 text-xs font-mono uppercase tracking-wider text-on-surface-variant mb-1">
+              <Layers className="h-3.5 w-3.5 text-secondary" />
+              <span>Multi-Tenant Ledger Spaces</span>
+            </div>
+            <h1 className="text-3xl font-extrabold tracking-tight text-ink">
+              Household Ledgers
+            </h1>
+            <p className="text-sm text-on-surface-variant mt-1 max-w-xl">
+              Switch between bachelor roommate debt-simplification networks and family pooled budget envelopes with deterministic double-entry integrity.
             </p>
           </div>
 
           <button
             onClick={() => setShowCreateModal(true)}
-            className="inline-flex items-center justify-center space-x-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 transition shadow-sm"
+            className="inline-flex items-center justify-center space-x-2 rounded-full bg-ink px-5 py-2.5 text-xs font-semibold text-white hover:bg-neutral-800 transition shadow-elevation-1 active:scale-[0.98]"
           >
-            <Plus className="h-4 w-4" />
+            <Plus className="h-4 w-4 stroke-[2.5]" />
             <span>Create New Home</span>
           </button>
         </div>
@@ -141,7 +155,7 @@ export default function HomesHubPage() {
             {[1, 2, 3].map((i) => (
               <div
                 key={i}
-                className="h-48 rounded-xl border border-surface-border bg-surface animate-pulse"
+                className="h-52 rounded-2xl border border-outline-variant bg-surface-container-lowest animate-pulse p-6"
               />
             ))}
           </div>
@@ -151,15 +165,15 @@ export default function HomesHubPage() {
               <div
                 key={h.id}
                 onClick={() => router.push(`/homes/${h.id}`)}
-                className="group cursor-pointer rounded-xl border border-surface-border bg-surface p-6 hover:border-indigo-500/50 hover:bg-surface-elevated transition duration-150 flex flex-col justify-between"
+                className="group cursor-pointer rounded-2xl border border-outline-variant/80 bg-surface-container-lowest p-6 hover:border-outline hover:shadow-elevation-2 transition duration-200 flex flex-col justify-between"
               >
                 <div>
                   <div className="flex items-center justify-between mb-4">
                     <span
-                      className={`inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      className={`inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[11px] font-semibold tracking-wide ${
                         h.type === HomeType.BACHELOR
-                          ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                          : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                          ? 'bg-[#e0f2fe] text-[#0369a1] border border-[#bae6fd]'
+                          : 'bg-secondary-container text-secondary border border-[#86efac]/40'
                       }`}
                     >
                       {h.type === HomeType.BACHELOR ? (
@@ -167,48 +181,54 @@ export default function HomesHubPage() {
                       ) : (
                         <HeartHandshake className="h-3 w-3 mr-1" />
                       )}
-                      <span>{h.type}</span>
+                      <span>{h.type === HomeType.BACHELOR ? 'Bachelor Mode' : 'Family Mode'}</span>
                     </span>
 
-                    <span className="text-xs text-slate-400 font-mono uppercase bg-slate-800 px-2 py-0.5 rounded">
+                    <span className="text-[11px] text-on-surface-variant font-mono uppercase bg-surface-container px-2 py-0.5 rounded-md border border-outline-variant/60">
                       {h.currentUserRole}
                     </span>
                   </div>
 
-                  <h3 className="text-lg font-bold text-white group-hover:text-indigo-400 transition">
+                  <h3 className="text-xl font-bold tracking-tight text-ink group-hover:text-primary transition">
                     {h.name}
                   </h3>
                   {h.description && (
-                    <p className="text-xs text-slate-400 mt-1 line-clamp-2">{h.description}</p>
+                    <p className="text-xs text-on-surface-variant mt-2 line-clamp-2 leading-relaxed">
+                      {h.description}
+                    </p>
                   )}
                 </div>
 
-                <div className="mt-6 pt-4 border-t border-surface-border flex items-center justify-between text-xs text-slate-400">
-                  <div className="flex items-center space-x-1.5">
-                    <Users className="h-4 w-4 text-slate-500" />
-                    <span>{h.members?.length || 1} members</span>
+                <div className="mt-8 pt-4 border-t border-outline-variant/60 flex items-center justify-between text-xs text-on-surface-variant">
+                  <div className="flex items-center space-x-2">
+                    <Users className="h-4 w-4 text-on-surface-variant/70" />
+                    <span className="font-numeric">{h.members?.length || 1} members</span>
+                    <span className="text-outline-variant">•</span>
+                    <span className="font-mono font-medium text-ink">{h.currency}</span>
                   </div>
 
-                  <div className="flex items-center space-x-1 font-medium text-indigo-400 group-hover:translate-x-1 transition">
-                    <span>Enter Home</span>
-                    <ArrowRight className="h-3.5 w-3.5" />
+                  <div className="flex items-center space-x-1 font-semibold text-ink group-hover:translate-x-1 transition">
+                    <span>Open Ledger</span>
+                    <ArrowRight className="h-3.5 w-3.5 stroke-[2.5]" />
                   </div>
                 </div>
               </div>
             ))}
           </div>
         ) : (
-          <div className="rounded-xl border border-dashed border-surface-border bg-surface/50 p-12 text-center">
-            <Building2 className="h-12 w-12 text-slate-500 mx-auto mb-3" />
-            <h3 className="text-base font-semibold text-white">No homes found</h3>
-            <p className="text-xs text-slate-400 max-w-sm mx-auto mt-1 mb-6">
-              You are not a member of any home yet. Create your first home to start managing household expenses.
+          <div className="rounded-2xl border border-dashed border-outline-variant bg-surface-container-lowest/60 p-14 text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-surface-container-high mx-auto mb-4 text-ink">
+              <Building2 className="h-6 w-6 stroke-[1.8]" />
+            </div>
+            <h3 className="text-base font-bold text-ink">No household ledgers found</h3>
+            <p className="text-xs text-on-surface-variant max-w-md mx-auto mt-1.5 mb-6 leading-relaxed">
+              You are not a member of any household yet. Establish your first shared space to track expenses, debts, and split ledgers with cent-perfect precision.
             </p>
             <button
               onClick={() => setShowCreateModal(true)}
-              className="inline-flex items-center space-x-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 transition"
+              className="inline-flex items-center space-x-2 rounded-full bg-ink px-5 py-2.5 text-xs font-semibold text-white hover:bg-neutral-800 transition shadow-elevation-1"
             >
-              <Plus className="h-4 w-4" />
+              <Plus className="h-4 w-4 stroke-[2.5]" />
               <span>Create Your First Home</span>
             </button>
           </div>
@@ -217,72 +237,77 @@ export default function HomesHubPage() {
 
       {/* Create Home Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-xl border border-surface-border bg-surface p-6 shadow-2xl">
-            <h3 className="text-lg font-bold text-white mb-1">Create New Home</h3>
-            <p className="text-xs text-slate-400 mb-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-outline-variant bg-surface-container-lowest p-6 shadow-elevation-3 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="text-lg font-bold tracking-tight text-ink">Establish New Household</h3>
+              <span className="text-[11px] font-mono uppercase bg-surface-container px-2 py-0.5 rounded text-on-surface-variant">
+                Setup
+              </span>
+            </div>
+            <p className="text-xs text-on-surface-variant mb-5">
               Set up a shared financial space for your apartment or family.
             </p>
 
             {formError && (
-              <div className="mb-4 rounded-lg bg-red-950/40 border border-red-500/30 p-2.5 text-xs text-red-200">
+              <div className="mb-4 rounded-xl bg-error-container border border-error/30 p-3 text-xs text-error font-medium">
                 {formError}
               </div>
             )}
 
             <form onSubmit={handleCreateSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">Home Name</label>
+                <label className="block text-xs font-semibold text-ink mb-1.5">Household Name</label>
                 <input
                   type="text"
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="e.g. 402 Pine St Bachelors / Sunset Villa"
-                  className="w-full rounded-lg border border-surface-border bg-surface-elevated px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+                  className="w-full rounded-xl border border-outline-variant bg-surface-container-low px-3.5 py-2.5 text-sm text-ink placeholder-on-surface-variant/60 focus:border-ink focus:bg-surface-container-lowest focus:outline-none transition"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">Home Type</label>
+                <label className="block text-xs font-semibold text-ink mb-1.5">Household Archetype</label>
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     type="button"
                     onClick={() => setType(HomeType.BACHELOR)}
-                    className={`rounded-lg border p-3 text-left transition ${
+                    className={`rounded-xl border p-3.5 text-left transition ${
                       type === HomeType.BACHELOR
-                        ? 'border-indigo-500 bg-indigo-950/40 text-white'
-                        : 'border-surface-border bg-surface-elevated text-slate-400 hover:text-white'
+                        ? 'border-ink bg-surface-container-highest shadow-sm'
+                        : 'border-outline-variant bg-surface-container-lowest hover:bg-surface-container-low'
                     }`}
                   >
-                    <Building2 className="h-4 w-4 mb-1 text-amber-400" />
-                    <p className="text-xs font-semibold">Bachelor / Flat</p>
-                    <p className="text-[10px] text-slate-400 mt-0.5">Roommates splitting rent & bills</p>
+                    <Building2 className="h-4 w-4 mb-1.5 text-ink" />
+                    <p className="text-xs font-bold text-ink">Bachelor / Flat</p>
+                    <p className="text-[11px] text-on-surface-variant mt-0.5 leading-snug">Roommates splitting bills & pairwise settlement</p>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setType(HomeType.FAMILY)}
-                    className={`rounded-lg border p-3 text-left transition ${
+                    className={`rounded-xl border p-3.5 text-left transition ${
                       type === HomeType.FAMILY
-                        ? 'border-indigo-500 bg-indigo-950/40 text-white'
-                        : 'border-surface-border bg-surface-elevated text-slate-400 hover:text-white'
+                        ? 'border-ink bg-surface-container-highest shadow-sm'
+                        : 'border-outline-variant bg-surface-container-lowest hover:bg-surface-container-low'
                     }`}
                   >
-                    <HeartHandshake className="h-4 w-4 mb-1 text-emerald-400" />
-                    <p className="text-xs font-semibold">Family</p>
-                    <p className="text-[10px] text-slate-400 mt-0.5">Household budget & shared pool</p>
+                    <HeartHandshake className="h-4 w-4 mb-1.5 text-secondary" />
+                    <p className="text-xs font-bold text-ink">Family</p>
+                    <p className="text-[11px] text-on-surface-variant mt-0.5 leading-snug">Pooled expenses & category budget envelopes</p>
                   </button>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1">Currency</label>
+                  <label className="block text-xs font-semibold text-ink mb-1.5">Ledger Currency</label>
                   <select
                     value={currency}
                     onChange={(e) => setCurrency(e.target.value)}
-                    className="w-full rounded-lg border border-surface-border bg-surface-elevated px-3 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none"
+                    className="w-full rounded-xl border border-outline-variant bg-surface-container-low px-3.5 py-2.5 text-sm text-ink focus:border-ink focus:bg-surface-container-lowest focus:outline-none font-mono"
                   >
                     <option value="INR">INR (₹)</option>
                     <option value="USD">USD ($)</option>
@@ -291,32 +316,32 @@ export default function HomesHubPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1">Description</label>
+                  <label className="block text-xs font-semibold text-ink mb-1.5">Description</label>
                   <input
                     type="text"
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     placeholder="Optional notes"
-                    className="w-full rounded-lg border border-surface-border bg-surface-elevated px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+                    className="w-full rounded-xl border border-outline-variant bg-surface-container-low px-3.5 py-2.5 text-sm text-ink placeholder-on-surface-variant/60 focus:border-ink focus:bg-surface-container-lowest focus:outline-none transition"
                   />
                 </div>
               </div>
 
-              <div className="flex items-center justify-end space-x-3 pt-4 border-t border-surface-border">
+              <div className="flex items-center justify-end space-x-3 pt-5 border-t border-outline-variant/60">
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="rounded-lg border border-surface-border px-4 py-2 text-xs font-medium text-slate-300 hover:bg-surface-elevated transition"
+                  className="rounded-full border border-outline-variant px-4 py-2 text-xs font-medium text-on-surface-variant hover:text-ink hover:bg-surface-container transition"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={createHomeMutation.isPending}
-                  className="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-500 transition disabled:opacity-50 flex items-center space-x-1.5"
+                  className="rounded-full bg-ink px-5 py-2 text-xs font-semibold text-white hover:bg-neutral-800 transition disabled:opacity-50 flex items-center space-x-1.5 shadow-elevation-1"
                 >
                   {createHomeMutation.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                  <span>Create Home</span>
+                  <span>Establish Home</span>
                 </button>
               </div>
             </form>
