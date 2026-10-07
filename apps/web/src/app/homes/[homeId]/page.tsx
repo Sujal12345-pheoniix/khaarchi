@@ -39,6 +39,7 @@ import {
   Users,
   Key,
 } from 'lucide-react';
+import { PwaInstallPrompt } from '@/components/pwa-install-prompt';
 import {
   ExpenseCategory,
   SplitType,
@@ -479,7 +480,8 @@ export default function HomeDashboardPage() {
             </div>
           </div>
 
-          <div className="flex items-center space-x-2.5">
+          <div className="flex items-center space-x-2 sm:space-x-2.5">
+            <PwaInstallPrompt />
             {homeDetails?.inviteCode && (
               <button
                 onClick={() => {
@@ -525,7 +527,7 @@ export default function HomeDashboardPage() {
       </header>
 
       {/* Main View Area */}
-      <main className="max-w-6xl mx-auto w-full px-4 py-6 space-y-6 flex-1">
+      <main className="max-w-6xl mx-auto w-full px-3.5 sm:px-4 py-4 sm:py-6 space-y-5 sm:space-y-6 flex-1 pb-24 md:pb-8">
         {/* Status / Invariant Micro Pill */}
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-1.5 bg-surface-container px-3 py-1 rounded-full text-on-surface-variant text-xs">
@@ -538,7 +540,7 @@ export default function HomeDashboardPage() {
           </div>
 
           {/* Mode Switcher Tabs */}
-          <div className="bg-surface-container p-1 rounded-lg flex items-center space-x-1 text-xs overflow-x-auto no-scrollbar">
+          <div className="bg-surface-container p-1 rounded-lg flex items-center space-x-1 text-xs overflow-x-auto no-scrollbar max-w-full">
             <button
               onClick={() => setActiveTab('expenses')}
               className={`px-3 py-1 rounded-md transition font-medium shrink-0 ${
@@ -595,7 +597,7 @@ export default function HomeDashboardPage() {
         </div>
 
         {/* Financial Metrics Strip */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
           <div className="rounded-xl border border-outline-variant/60 bg-surface-container-lowest p-4 shadow-level1">
             <p className="text-[11px] font-medium text-on-surface-variant uppercase tracking-wider">
               Your Net Position
@@ -1869,6 +1871,58 @@ export default function HomeDashboardPage() {
           </div>
         </div>
       )}
+
+      {/* Mobile Bottom Navigation Bar (Visible on phones & tablets < md) */}
+      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 py-1.5 px-3 flex items-center justify-around md:hidden shadow-lg safe-area-bottom">
+        <button
+          onClick={() => setActiveTab('expenses')}
+          className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition ${
+            activeTab === 'expenses' ? 'text-slate-900 font-bold' : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Receipt className="h-5 w-5" />
+          <span className="text-[10px] mt-0.5 font-medium">Expenses</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('balances')}
+          className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition ${
+            activeTab === 'balances' ? 'text-slate-900 font-bold' : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Scale className="h-5 w-5" />
+          <span className="text-[10px] mt-0.5 font-medium">Debts</span>
+        </button>
+
+        {/* Floating Quick Add Action in Mobile Nav Center */}
+        <button
+          onClick={() => setShowAddExpense(true)}
+          className="flex items-center justify-center w-11 h-11 -mt-5 rounded-full bg-slate-900 text-white shadow-lg active:scale-95 transition"
+          title="Add Expense"
+        >
+          <Plus className="h-6 w-6 stroke-[2.5]" />
+        </button>
+
+        <button
+          onClick={() => setActiveTab('members')}
+          className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition ${
+            activeTab === 'members' ? 'text-slate-900 font-bold' : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Users className="h-5 w-5" />
+          <span className="text-[10px] mt-0.5 font-medium">Members</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('settings')}
+          className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition ${
+            activeTab === 'settings' ? 'text-slate-900 font-bold' : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <SettingsIcon className="h-5 w-5" />
+          <span className="text-[10px] mt-0.5 font-medium">Settings</span>
+        </button>
+      </nav>
     </div>
   );
 }

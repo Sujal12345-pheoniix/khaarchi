@@ -24,6 +24,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { HomeType } from '@homeexpense/shared';
+import { PwaInstallPrompt } from '@/components/pwa-install-prompt';
 
 interface HomeItem {
   id: string;
@@ -144,27 +145,28 @@ export default function HomesHubPage() {
             </div>
           </div>
 
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2 sm:space-x-4">
+            <PwaInstallPrompt />
             <div className="text-right hidden sm:block">
-              <p className="text-xs font-semibold text-ink">{user?.name}</p>
-              <p className="text-[11px] text-on-surface-variant font-mono">{user?.email}</p>
+              <p className="text-xs font-semibold text-slate-900">{user?.name}</p>
+              <p className="text-[11px] text-slate-500 font-mono">{user?.email}</p>
             </div>
             <button
               onClick={() => {
                 logout();
                 router.push('/login');
               }}
-              className="flex items-center space-x-1.5 rounded-full border border-slate-300 bg-white px-3.5 py-1.5 text-xs font-semibold text-slate-800 hover:bg-slate-100 hover:text-black transition shadow-sm"
+              className="flex items-center space-x-1.5 rounded-full border border-slate-300 bg-white px-3 sm:px-3.5 py-1.5 text-xs font-semibold text-slate-800 hover:bg-slate-100 hover:text-black transition shadow-sm shrink-0"
             >
               <LogOut className="h-3.5 w-3.5 text-slate-600" />
-              <span>Sign out</span>
+              <span className="hidden sm:inline">Sign out</span>
             </button>
           </div>
         </div>
       </header>
 
       {/* Main Container */}
-      <main className="max-w-6xl mx-auto px-4 py-10">
+      <main className="max-w-6xl mx-auto px-4 py-6 sm:py-10">
         {/* Header Hero Section */}
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8 pb-6 border-b border-slate-200">
           <div>
@@ -172,29 +174,29 @@ export default function HomesHubPage() {
               <Layers className="h-3.5 w-3.5 text-emerald-600" />
               <span>Multi-Tenant Ledger Spaces</span>
             </div>
-            <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">
+            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
               Household Ledgers
             </h1>
-            <p className="text-sm text-slate-600 mt-1 max-w-xl">
+            <p className="text-xs sm:text-sm text-slate-600 mt-1 max-w-xl">
               Switch between bachelor roommate debt-simplification networks and family pooled budget envelopes with deterministic double-entry integrity.
             </p>
           </div>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 w-full sm:w-auto">
             <button
               onClick={() => {
                 setJoinError(null);
                 setJoinCode('');
                 setShowJoinModal(true);
               }}
-              className="inline-flex items-center justify-center space-x-2 rounded-full border border-slate-300 bg-white px-4 py-2.5 text-xs font-semibold text-slate-800 hover:bg-slate-100 transition shadow-sm active:scale-[0.98]"
+              className="flex-1 sm:flex-none inline-flex items-center justify-center space-x-2 rounded-full border border-slate-300 bg-white px-4 py-2.5 text-xs font-semibold text-slate-800 hover:bg-slate-100 transition shadow-sm active:scale-[0.98]"
             >
               <Key className="h-3.5 w-3.5 text-emerald-600" />
               <span>Join with Code</span>
             </button>
             <button
               onClick={() => setShowCreateModal(true)}
-              className="inline-flex items-center justify-center space-x-2 rounded-full bg-slate-900 px-5 py-2.5 text-xs font-semibold text-white hover:bg-slate-800 transition shadow-md active:scale-[0.98]"
+              className="flex-1 sm:flex-none inline-flex items-center justify-center space-x-2 rounded-full bg-slate-900 px-5 py-2.5 text-xs font-semibold text-white hover:bg-slate-800 transition shadow-md active:scale-[0.98]"
             >
               <Plus className="h-4 w-4 stroke-[2.5]" />
               <span>Create New Home</span>
