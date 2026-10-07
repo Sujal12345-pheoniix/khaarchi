@@ -17,6 +17,14 @@ async function bootstrap() {
 
   const app = await NestFactory.create(AppModule);
 
+  // Normalize incoming URLs to collapse any duplicate slashes (e.g. "//api/v1/..." -> "/api/v1/...")
+  app.use((req: any, _res: any, next: any) => {
+    if (req.url) {
+      req.url = req.url.replace(/\/{2,}/g, '/');
+    }
+    next();
+  });
+
   // Security Headers via Helmet
   app.use(
     helmet({

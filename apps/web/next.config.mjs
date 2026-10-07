@@ -9,10 +9,12 @@ const nextConfig = {
     '@homeexpense/config',
   ],
   async rewrites() {
+    const rawInternal = process.env.API_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+    const cleanInternal = rawInternal.replace(/\/+$/, '').replace(/\/api\/v1$/, '');
     return [
       {
         source: '/api/v1/:path*',
-        destination: `${process.env.API_INTERNAL_URL || 'http://localhost:4000'}/api/v1/:path*`,
+        destination: `${cleanInternal}/api/v1/:path*`,
       },
     ];
   },

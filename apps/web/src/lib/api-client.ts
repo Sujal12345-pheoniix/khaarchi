@@ -1,15 +1,27 @@
-// 1. Get raw base URL or fallback to local development
-const RAW_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
+function getBaseUrl(): string {
+  const envUrl = process.env.NEXT_PUBLIC_API_URL;
+  if (!envUrl) {
+    // If running in browser and no NEXT_PUBLIC_API_URL was supplied, use relative path so Next.js rewrites handle it
+    if (typeof window !== 'undefined') {
+      return '/api/v1';
+    }
+    return 'http://localhost:4000/api/v1';
+  }
 
-// 2. Strip any trailing slashes (e.g. "https://khaarchi.onrender.com/" -> "https://khaarchi.onrender.com")
-let cleanBase = RAW_URL.replace(/\/+$/, '');
+  // Strip trailing slashes
+  let clean = envUrl.trim().replace(/\/+$/, '');
+  if (!clean || clean === '/') {
+    return '/api/v1';
+  }
 
-// 3. Automatically ensure "/api/v1" is present at the end
-if (!cleanBase.endsWith('/api/v1')) {
-  cleanBase = `${cleanBase}/api/v1`;
+  // Ensure /api/v1 suffix if not already present
+  if (!clean.endsWith('/api/v1')) {
+    clean = `${clean}/api/v1`;
+  }
+  return clean;
 }
 
-export const API_BASE_URL = cleanBase;
+export const API_BASE_URL = getBaseUrl();
 
 export async function apiClient<T = any>(
   endpoint: string,
@@ -17,7 +29,14 @@ export async function apiClient<T = any>(
 ): Promise<T> {
   // Ensure endpoint always starts with a single slash
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-  const url = `${API_BASE_URL}${cleanEndpoint}`;
+
+  // Combine base URL and endpoint
+  const rawUrl = `${getBaseUrl()}${cleanEndpoint}`;
+
+  // Collapse any duplicate slashes after protocol and at path start:
+  // e.g. "https://domain.com//api/v1" -> "https://domain.com/api/v1"
+  // e.g. "//api/v1/auth/login" -> "/api/v1/auth/login"
+  const url = rawUrl.replace(/([^:]\/)\/+/g, '$1').replace(/^\/{2,}/, '/');
 
   // Read auth token from localStorage if in browser environment
   let token: string | null = null;
