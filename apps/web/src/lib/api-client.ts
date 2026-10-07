@@ -22,7 +22,11 @@ export async function apiClient<T = any>(
   // Read auth token from localStorage if in browser environment
   let token: string | null = null;
   if (typeof window !== 'undefined') {
-    token = localStorage.getItem('token') || localStorage.getItem('homeexpense_token');
+    token =
+      localStorage.getItem('auth_token') ||
+      localStorage.getItem('token') ||
+      localStorage.getItem('accessToken') ||
+      localStorage.getItem('homeexpense_token');
   }
 
   const headers: Record<string, string> = {
@@ -38,6 +42,23 @@ export async function apiClient<T = any>(
     ...options,
     headers,
   });
+
+  // Handle 401 Unauthorized (session expired or invalid token)
+  if (response.status === 401) {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('token');
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('homeexpense_token');
+      if (
+        !window.location.pathname.startsWith('/login') &&
+        !window.location.pathname.startsWith('/register')
+      ) {
+        window.location.href = '/login';
+      }
+    }
+    throw new Error('Your session has expired or you are unauthorized. Please sign in.');
+  }
 
   // Handle 204 No Content
   if (response.status === 204) {

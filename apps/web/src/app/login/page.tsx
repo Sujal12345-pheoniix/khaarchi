@@ -89,17 +89,17 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
-              className="w-full rounded-xl border border-outline-variant bg-surface-container-low px-3.5 py-2.5 text-sm text-ink placeholder-on-surface-variant/60 focus:border-ink focus:bg-surface-container-lowest focus:outline-none transition font-mono"
+              className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-slate-900 focus:bg-white focus:outline-none transition font-mono"
             />
           </div>
 
           <button
             type="submit"
             disabled={isSubmitting}
-            className="flex w-full items-center justify-center space-x-2 rounded-full bg-ink px-4 py-3 text-xs font-semibold text-white transition hover:bg-neutral-800 disabled:opacity-50 shadow-elevation-1 active:scale-[0.99] mt-2"
+            className="flex w-full items-center justify-center space-x-2 rounded-full bg-slate-900 px-4 py-3 text-xs font-semibold text-white transition hover:bg-slate-800 disabled:opacity-50 shadow-md active:scale-[0.99] mt-2 cursor-pointer"
           >
             {isSubmitting ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Loader2 className="h-4 w-4 animate-spin text-white" />
             ) : (
               <>
                 <span>Sign in to Ledger</span>
@@ -109,9 +109,9 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <div className="mt-6 border-t border-outline-variant/60 pt-4 text-center text-xs text-on-surface-variant">
+        <div className="mt-6 border-t border-slate-200 pt-4 text-center text-xs text-slate-600">
           Don&apos;t have an account?{' '}
-          <Link href="/register" className="font-semibold text-ink hover:underline">
+          <Link href="/register" className="font-semibold text-slate-900 hover:underline">
             Create account
           </Link>
         </div>
