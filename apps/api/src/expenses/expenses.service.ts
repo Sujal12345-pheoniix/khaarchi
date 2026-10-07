@@ -15,26 +15,74 @@ export class ExpensesService {
   constructor(private readonly prisma: PrismaService) {}
 
   async createExpense(homeId: string, actorUserId: string, input: CreateExpenseInput) {
-    // 1. Verify splits invariant
-    const splitValidation = validateExpenseSplits({
-      totalAmount: input.amount,
-      splits: input.splits,
-    });
-    if (!splitValidation.valid) {
-      throw new BadRequestException(splitValidation.error);
-    }
+    // 1. Verify and auto-reconcile splits
+    let splits = input.splits || [];
+    const totalCents = toCents(input.amount);
 
     return this.prisma.$transaction(async (tx) => {
-      // 2. Validate payer belongs to home and is active
+      // 2. Validate or auto-resolve payer
+      let payerId = input.payerMemberId;
+      if (!payerId) {
+        const defaultMember = await tx.homeMember.findFirst({
+          where: { homeId, userId: actorUserId, isActive: true },
+        }) || await tx.homeMember.findFirst({
+          where: { homeId, isActive: true },
+        });
+        payerId = defaultMember?.id || '';
+      }
+
       const payer = await tx.homeMember.findFirst({
-        where: { id: input.payerMemberId, homeId, isActive: true },
+        where: { id: payerId, homeId, isActive: true },
       });
       if (!payer) {
         throw new BadRequestException('Payer member is not an active member of this home.');
       }
 
+      // 3. Validate or auto-resolve participants
+      const allActiveMembers = await tx.homeMember.findMany({
+        where: { homeId, isActive: true },
+      });
+
+      if (!splits || splits.length === 0) {
+        // Auto-split equally among all active members
+        const activeIds = allActiveMembers.map((m) => m.id);
+        const count = activeIds.length;
+        const baseCents = Math.floor(totalCents / count);
+        let rem = totalCents % count;
+        splits = activeIds.map((id) => {
+          let cents = baseCents;
+          if (rem > 0) {
+            cents += 1;
+            rem -= 1;
+          }
+          return {
+            memberId: id,
+            amount: toMajor(cents),
+          };
+        });
+      } else {
+        // Reconcile any small cent discrepancies automatically
+        const sumSplitsCents = splits.reduce((acc, s) => acc + toCents(s.amount), 0);
+        const discrepancy = totalCents - sumSplitsCents;
+        if (discrepancy !== 0 && splits.length > 0) {
+          const targetSplit = splits[0];
+          const adjustedCents = toCents(targetSplit.amount) + discrepancy;
+          if (adjustedCents > 0) {
+            targetSplit.amount = toMajor(adjustedCents);
+          }
+        }
+      }
+
+      const splitValidation = validateExpenseSplits({
+        totalAmount: input.amount,
+        splits,
+      });
+      if (!splitValidation.valid) {
+        throw new BadRequestException(splitValidation.error);
+      }
+
       // 3. Validate all split participants belong to home and are active
-      const participantIds = input.splits.map((s) => s.memberId);
+      const participantIds = splits.map((s) => s.memberId);
       const activeMembers = await tx.homeMember.findMany({
         where: {
           id: { in: participantIds },
@@ -52,25 +100,25 @@ export class ExpensesService {
       const expense = await tx.expense.create({
         data: {
           homeId,
-          payerMemberId: input.payerMemberId,
+          payerMemberId: payerId,
           amount: new Prisma.Decimal(input.amount),
-          description: input.description,
+          description: input.description || `${input.category || 'Household'} Expense`,
           category: input.category,
           splitType: input.splitType,
           receiptUrl: input.receiptUrl,
           notes: input.notes,
-          date: new Date(input.date),
+          date: input.date ? new Date(input.date) : new Date(),
         },
       });
 
       // 5. Create ExpenseSplit records
       await tx.expenseSplit.createMany({
-        data: input.splits.map((s) => ({
+        data: splits.map((s) => ({
           expenseId: expense.id,
           memberId: s.memberId,
           amount: new Prisma.Decimal(s.amount),
-          percentage: s.percentage ? new Prisma.Decimal(s.percentage) : null,
-          shares: s.shares || null,
+          percentage: (s as any).percentage ? new Prisma.Decimal((s as any).percentage) : null,
+          shares: (s as any).shares || null,
         })),
       });
 
@@ -78,15 +126,15 @@ export class ExpensesService {
       // For each participant who is NOT the payer, debtor owes creditor (payer)
       const ledgerEntriesData: Prisma.LedgerEntryCreateManyInput[] = [];
 
-      for (const split of input.splits) {
-        if (split.memberId !== input.payerMemberId) {
+      for (const split of splits) {
+        if (split.memberId !== payerId) {
           ledgerEntriesData.push({
             homeId,
             expenseId: expense.id,
             debtorMemberId: split.memberId,
-            creditorMemberId: input.payerMemberId,
+            creditorMemberId: payerId,
             amount: new Prisma.Decimal(split.amount),
-            notes: `Split for expense: ${input.description}`,
+            notes: `Split for expense: ${input.description || 'Household Expense'}`,
           });
         }
       }

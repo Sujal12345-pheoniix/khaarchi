@@ -386,25 +386,47 @@ export default function HomeDashboardPage() {
     e.preventDefault();
     setExpenseError(null);
 
-    const total = parseFloat(expenseAmount);
-    if (!total || total <= 0) {
-      setExpenseError('Enter a valid positive expense amount.');
+    const total = parseFloat(expenseAmount) || 0;
+    if (total <= 0) {
+      setExpenseError('Please enter a valid expense amount.');
       return;
     }
 
-    if (!isSplitValid) {
-      setExpenseError('Splits must sum exactly to the expense amount.');
-      return;
+    const payerId = expensePayerId || currentMember?.id || (homeDetails?.members?.[0]?.id ?? '');
+    const activeMemberIds = homeDetails?.members?.map((m: any) => m.id) || [];
+    const participants = selectedParticipants.length > 0 ? selectedParticipants : activeMemberIds;
+
+    let finalSplits = computedSplits;
+    if (!finalSplits || finalSplits.length === 0) {
+      if (participants.length > 0) {
+        finalSplits = calculateEqualSplits(total, participants);
+      } else if (payerId) {
+        finalSplits = [{ memberId: payerId, amount: total, cents: Math.round(total * 100) }];
+      }
+    }
+
+    // Cent-perfect adjustment to guarantee sum of splits matches total exactly
+    if (finalSplits && finalSplits.length > 0) {
+      const sumCents = finalSplits.reduce((acc, s) => acc + Math.round(s.amount * 100), 0);
+      const totalCents = Math.round(total * 100);
+      const diffCents = totalCents - sumCents;
+      if (diffCents !== 0) {
+        finalSplits = [...finalSplits];
+        finalSplits[0] = {
+          ...finalSplits[0],
+          amount: Number(((Math.round(finalSplits[0].amount * 100) + diffCents) / 100).toFixed(2)),
+        };
+      }
     }
 
     createExpenseMutation.mutate({
-      description: expenseDesc,
+      description: expenseDesc.trim() || `${expenseCategory} Expense`,
       amount: total,
       category: expenseCategory,
       date: new Date().toISOString(),
-      payerMemberId: expensePayerId,
+      payerMemberId: payerId,
       splitType: expenseSplitType,
-      splits: computedSplits.map((s) => ({
+      splits: (finalSplits || []).map((s) => ({
         memberId: s.memberId,
         amount: s.amount,
       })),
@@ -1637,18 +1659,21 @@ export default function HomeDashboardPage() {
                 <ShieldCheck className="h-4 w-4 text-on-secondary-container" />
               </div>
 
-              {/* Sticky Submit Button */}
+              {/* Submit Button */}
               <button
                 type="submit"
-                disabled={!isSplitValid || createExpenseMutation.isPending}
-                className="w-full h-11 rounded-xl bg-primary text-on-primary font-semibold text-xs flex items-center justify-center gap-2 hover:bg-on-surface-variant active:scale-[0.99] transition disabled:opacity-40"
+                disabled={createExpenseMutation.isPending}
+                className="w-full h-12 rounded-xl bg-slate-900 text-white font-semibold text-sm flex items-center justify-center gap-2 hover:bg-slate-800 active:scale-[0.99] transition disabled:opacity-50 shadow-md cursor-pointer"
               >
                 {createExpenseMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Adding Expense...</span>
+                  </>
                 ) : (
                   <span>
-                    Save Expense ({currencySymbol}
-                    {parseFloat(expenseAmount || '0').toFixed(2)})
+                    Add Expense ({currencySymbol}
+                    {(parseFloat(expenseAmount) || 0).toFixed(2)})
                   </span>
                 )}
               </button>

@@ -49,3 +49,10 @@ scratch/
 # Keep prisma schema and migrations in git, ignore sqlite or generated client if local
 prisma/*.db
 prisma/*.db-journal
+
+# Android build intermediate files
+android_build/bin/
+android_build/gen/
+android_build/*.keystore
+*.idsig
+
