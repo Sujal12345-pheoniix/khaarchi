@@ -75,23 +75,58 @@ enum InvitationStatus {
   REVOKED
 }
 
+enum BillStatus {
+  UNPAID
+  PAID
+  OVERDUE
+}
+
+enum RecurringInterval {
+  DAILY
+  WEEKLY
+  MONTHLY
+  YEARLY
+}
+
+enum HealthStatus {
+  EXCELLENT
+  HEALTHY
+  WATCH
+  AT_RISK
+  CRITICAL
+  BUILDING_PROFILE
+}
+
+enum InsightSeverity {
+  CRITICAL
+  WARNING
+  INFO
+  POSITIVE
+}
+
+enum DataSufficiency {
+  FULL
+  PARTIAL
+  INSUFFICIENT
+}
+
 model User {
-  id                         String    @id @default(uuid()) @db.Uuid
-  email                      String    @unique
-  passwordHash               String
-  name                       String
-  avatarUrl                  String?
-  emailVerified              Boolean   @default(false)
-  emailVerificationToken     String?
-  emailVerificationExpires   DateTime?
-  passwordResetToken         String?
-  passwordResetExpires       DateTime?
-  failedLoginAttempts        Int       @default(0)
-  lockoutUntil               DateTime?
-  isDeactivated              Boolean   @default(false)
-  deactivatedAt              DateTime?
-  createdAt                  DateTime  @default(now())
-  updatedAt                  DateTime  @updatedAt
+  id                       String    @id @default(uuid()) @db.Uuid
+  email                    String    @unique
+  passwordHash             String
+  name                     String
+  avatarUrl                String?
+  emailVerified            Boolean   @default(false)
+  emailVerificationToken   String?
+  emailVerificationExpires DateTime?
+  passwordResetToken       String?
+  passwordResetExpires     DateTime?
+  failedLoginAttempts      Int       @default(0)
+  lockoutUntil             DateTime?
+  isDeactivated            Boolean   @default(false)
+  deactivatedAt            DateTime?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
 
   members         HomeMember[]
   auditLogs       AuditLog[]
@@ -130,12 +165,17 @@ model Home {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  members       HomeMember[]
-  invitations   HomeInvitation[]
-  expenses      Expense[]
-  ledgerEntries LedgerEntry[]
-  settlements   Settlement[]
-  auditLogs     AuditLog[]
+  members           HomeMember[]
+  invitations       HomeInvitation[]
+  expenses          Expense[]
+  ledgerEntries     LedgerEntry[]
+  settlements       Settlement[]
+  auditLogs         AuditLog[]
+  budgets           Budget[]
+  bills             Bill[]
+  recurringExpenses RecurringExpense[]
+  healthSnapshots   FinancialHealthSnapshot[]
+  healthInsights    FinancialHealthInsight[]
 
   @@map("homes")
 }
@@ -154,12 +194,13 @@ model HomeMember {
   home Home @relation(fields: [homeId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  paidExpenses        Expense[]      @relation("ExpensePayer")
+  paidExpenses        Expense[]          @relation("ExpensePayer")
   expenseSplits       ExpenseSplit[]
-  debts               LedgerEntry[]  @relation("DebtorMember")
-  credits             LedgerEntry[]  @relation("CreditorMember")
-  settlementsSent     Settlement[]   @relation("SettlementPayer")
-  settlementsReceived Settlement[]   @relation("SettlementPayee")
+  debts               LedgerEntry[]      @relation("DebtorMember")
+  credits             LedgerEntry[]      @relation("CreditorMember")
+  settlementsSent     Settlement[]       @relation("SettlementPayer")
+  settlementsReceived Settlement[]       @relation("SettlementPayee")
+  recurringExpenses   RecurringExpense[] @relation("RecurringPayer")
 
   @@unique([homeId, userId])
   @@index([homeId])
@@ -295,4 +336,121 @@ model AuditLog {
   @@index([homeId, createdAt])
   @@index([actorUserId])
   @@map("audit_logs")
+}
+
+model Budget {
+  id          String   @id @default(uuid()) @db.Uuid
+  homeId      String   @db.Uuid
+  month       Int
+  year        Int
+  totalBudget Decimal  @db.Decimal(12, 2)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  home       Home             @relation(fields: [homeId], references: [id], onDelete: Cascade)
+  categories BudgetCategory[]
+
+  @@unique([homeId, year, month])
+  @@index([homeId])
+  @@map("budgets")
+}
+
+model BudgetCategory {
+  id              String          @id @default(uuid()) @db.Uuid
+  budgetId        String          @db.Uuid
+  category        ExpenseCategory
+  allocatedAmount Decimal         @db.Decimal(12, 2)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  budget Budget @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+
+  @@unique([budgetId, category])
+  @@index([budgetId])
+  @@map("budget_categories")
+}
+
+model Bill {
+  id              String     @id @default(uuid()) @db.Uuid
+  homeId          String     @db.Uuid
+  title           String     @db.VarChar(150)
+  amount          Decimal    @db.Decimal(12, 2)
+  dueDate         DateTime
+  status          BillStatus @default(UNPAID)
+  billDocumentUrl String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  home Home @relation(fields: [homeId], references: [id], onDelete: Cascade)
+
+  @@index([homeId, dueDate])
+  @@index([homeId, status])
+  @@map("bills")
+}
+
+model RecurringExpense {
+  id            String            @id @default(uuid()) @db.Uuid
+  homeId        String            @db.Uuid
+  payerMemberId String            @db.Uuid
+  amount        Decimal           @db.Decimal(12, 2)
+  description   String            @db.VarChar(255)
+  category      ExpenseCategory   @default(OTHER)
+  interval      RecurringInterval @default(MONTHLY)
+  nextRunAt     DateTime
+  splitType     SplitType         @default(EQUAL)
+  active        Boolean           @default(true)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  home  Home       @relation(fields: [homeId], references: [id], onDelete: Cascade)
+  payer HomeMember @relation("RecurringPayer", fields: [payerMemberId], references: [id], onDelete: Restrict)
+
+  @@index([homeId, active])
+  @@index([homeId, nextRunAt])
+  @@map("recurring_expenses")
+}
+
+model FinancialHealthSnapshot {
+  id              String          @id @default(uuid()) @db.Uuid
+  homeId          String          @db.Uuid
+  periodStart     DateTime
+  periodEnd       DateTime
+  score           Int?
+  status          HealthStatus
+  scoringVersion  String          @db.VarChar(50)
+  profile         HomeType
+  dataSufficiency DataSufficiency
+  dimensionScores Json
+  metrics         Json
+  createdAt       DateTime        @default(now())
+
+  home Home @relation(fields: [homeId], references: [id], onDelete: Cascade)
+
+  @@index([homeId, createdAt])
+  @@index([homeId, periodStart, periodEnd])
+  @@map("financial_health_snapshots")
+}
+
+model FinancialHealthInsight {
+  id             String          @id @default(uuid()) @db.Uuid
+  homeId         String          @db.Uuid
+  type           String          @db.VarChar(50)
+  severity       InsightSeverity
+  title          String          @db.VarChar(200)
+  description    String          @db.Text
+  affectedDomain String          @db.VarChar(50)
+  metricValue    Decimal?        @db.Decimal(12, 2)
+  thresholdValue Decimal?        @db.Decimal(12, 2)
+  entityType     String?         @db.VarChar(50)
+  entityId       String?         @db.Uuid
+  status         String          @default("ACTIVE") @db.VarChar(20)
+  scoringVersion String          @db.VarChar(50)
+  createdAt      DateTime        @default(now())
+  resolvedAt     DateTime?
+
+  home Home @relation(fields: [homeId], references: [id], onDelete: Cascade)
+
+  @@index([homeId, status])
+  @@index([homeId, createdAt])
+  @@map("financial_health_insights")
 }
