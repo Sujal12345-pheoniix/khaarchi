@@ -38,6 +38,9 @@ import {
   Settings as SettingsIcon,
   Users,
   Key,
+  Sliders,
+  Wallet,
+  PieChart,
 } from 'lucide-react';
 import { PwaInstallPrompt } from '@/components/pwa-install-prompt';
 import { FinancialHealthCard } from '@/components/financial-health-card';
@@ -102,6 +105,13 @@ export default function HomeDashboardPage() {
   const [settingsSuccess, setSettingsSuccess] = useState<string | null>(null);
   const [settingsError, setSettingsError] = useState<string | null>(null);
 
+  // Budget Envelopes State
+  const [showBudgetModal, setShowBudgetModal] = useState(false);
+  const [budgetTotalInput, setBudgetTotalInput] = useState('');
+  const [categoryAllocations, setCategoryAllocations] = useState<Record<string, string>>({});
+  const [budgetError, setBudgetError] = useState<string | null>(null);
+  const [budgetSuccess, setBudgetSuccess] = useState<string | null>(null);
+
   // Redirect if unauthenticated
   React.useEffect(() => {
     if (!authLoading && !token) {
@@ -125,6 +135,12 @@ export default function HomeDashboardPage() {
   const { data: expensesData, isLoading: expensesLoading } = useQuery({
     queryKey: ['expenses', homeId],
     queryFn: () => apiClient<any>(`/homes/${homeId}/expenses`),
+    enabled: !!token && !!homeId,
+  });
+
+  const { data: budgetData, isLoading: budgetLoading } = useQuery({
+    queryKey: ['budget', homeId],
+    queryFn: () => apiClient<any>(`/homes/${homeId}/budgets/current`),
     enabled: !!token && !!homeId,
   });
 
@@ -364,6 +380,66 @@ export default function HomeDashboardPage() {
       setSettingsError(err.message || 'Failed to rotate secret code.');
     },
   });
+
+  const setBudgetMutation = useMutation({
+    mutationFn: (body: any) =>
+      apiClient(`/homes/${homeId}/budgets`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['budget', homeId] });
+      queryClient.invalidateQueries({ queryKey: ['financial-health', homeId] });
+      setShowBudgetModal(false);
+      setBudgetSuccess('Family budget and category envelopes successfully saved.');
+      setTimeout(() => setBudgetSuccess(null), 4000);
+    },
+    onError: (err: any) => {
+      setBudgetError(err.message || 'Failed to update family budget.');
+    },
+  });
+
+  const handleOpenBudgetModal = () => {
+    setBudgetError(null);
+    if (budgetData?.hasBudget) {
+      setBudgetTotalInput(String(budgetData.totalBudget));
+      const allocations: Record<string, string> = {};
+      budgetData.categories?.forEach((cat: any) => {
+        allocations[cat.category] = String(cat.allocatedAmount);
+      });
+      setCategoryAllocations(allocations);
+    } else {
+      setBudgetTotalInput('');
+      const defaultAllocations: Record<string, string> = {};
+      Object.values(ExpenseCategory).forEach((cat) => {
+        defaultAllocations[cat] = '';
+      });
+      setCategoryAllocations(defaultAllocations);
+    }
+    setShowBudgetModal(true);
+  };
+
+  const handleBudgetSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setBudgetError(null);
+    const total = parseFloat(budgetTotalInput);
+    if (!total || total <= 0) {
+      setBudgetError('Please specify a positive total monthly budget.');
+      return;
+    }
+
+    const categoriesPayload = Object.entries(categoryAllocations)
+      .map(([category, val]) => ({
+        category,
+        allocatedAmount: parseFloat(val) || 0,
+      }))
+      .filter((c) => c.allocatedAmount > 0);
+
+    setBudgetMutation.mutate({
+      totalBudget: total,
+      categories: categoriesPayload,
+    });
+  };
 
   React.useEffect(() => {
     if (homeDetails) {
@@ -902,47 +978,178 @@ export default function HomeDashboardPage() {
 
         {/* Tab 3: Family Envelope Budgets */}
         {activeTab === 'envelopes' && (
-          <div className="rounded-xl border border-outline-variant/60 bg-surface-container-lowest p-6 shadow-level1 space-y-6">
-            <div>
-              <h3 className="text-base font-semibold text-on-surface">Monthly Category Envelopes</h3>
-              <p className="text-xs text-on-surface-variant">
-                Budget limits and burn-down monitoring for pooled family funds.
-              </p>
-            </div>
+          <div className="space-y-6">
+            {/* Success / Error notification */}
+            {budgetSuccess && (
+              <div className="p-3 bg-secondary-container/40 border border-secondary/30 rounded-xl text-xs text-on-surface flex items-center gap-2">
+                <Check className="h-4 w-4 text-secondary shrink-0" />
+                <span>{budgetSuccess}</span>
+              </div>
+            )}
+            {budgetError && (
+              <div className="p-3 bg-error-container/30 border border-error/20 rounded-xl text-xs text-error flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>{budgetError}</span>
+              </div>
+            )}
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="p-4 rounded-xl bg-surface-container-low border border-outline-variant/40 space-y-2">
-                <div className="flex justify-between items-center text-xs">
-                  <span className="font-semibold text-on-surface">Groceries</span>
-                  <span className="text-on-surface-variant tabular-nums">₹12,450 / ₹20,000</span>
+            {/* Budget Envelopes Card */}
+            <div className="rounded-xl border border-outline-variant/60 bg-surface-container-lowest p-6 shadow-level1 space-y-6">
+              <div className="flex items-start sm:items-center justify-between flex-col sm:flex-row gap-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-semibold text-on-surface">Monthly Category Envelopes</h3>
+                    <span className="px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant text-[10px] font-medium uppercase tracking-wider">
+                      Authoritative Envelopes
+                    </span>
+                  </div>
+                  <p className="text-xs text-on-surface-variant mt-0.5">
+                    PostgreSQL-backed monthly budget and live expense burn-down engine.
+                  </p>
                 </div>
-                <div className="w-full h-1.5 rounded-full bg-surface-container-high overflow-hidden">
-                  <div className="h-full bg-secondary rounded-full" style={{ width: '62%' }} />
+
+                <div className="flex items-center gap-2">
+                  {currentMember?.role === MemberRole.OWNER ? (
+                    <button
+                      onClick={handleOpenBudgetModal}
+                      className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-primary text-on-primary text-xs font-semibold hover:bg-on-surface-variant transition shadow-sm"
+                    >
+                      <Sliders className="h-3.5 w-3.5" />
+                      <span>{budgetData?.hasBudget ? 'Edit Family Budget' : 'Set Monthly Budget'}</span>
+                    </button>
+                  ) : (
+                    <div className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-surface-container-low border border-outline-variant/50 text-xs text-on-surface-variant">
+                      <Lock className="h-3.5 w-3.5 text-on-surface-variant" />
+                      <span>Owner-managed budget</span>
+                    </div>
+                  )}
                 </div>
-                <span className="text-[10px] text-secondary font-medium">38% remaining</span>
               </div>
 
-              <div className="p-4 rounded-xl bg-surface-container-low border border-outline-variant/40 space-y-2">
-                <div className="flex justify-between items-center text-xs">
-                  <span className="font-semibold text-on-surface">Utilities</span>
-                  <span className="text-on-surface-variant tabular-nums">₹4,200 / ₹6,000</span>
+              {budgetLoading ? (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="h-24 rounded-xl bg-surface-container animate-pulse" />
+                  ))}
                 </div>
-                <div className="w-full h-1.5 rounded-full bg-surface-container-high overflow-hidden">
-                  <div className="h-full bg-secondary rounded-full" style={{ width: '70%' }} />
+              ) : !budgetData?.hasBudget ? (
+                /* Unconfigured state */
+                <div className="p-6 rounded-xl bg-surface-container-low border border-outline-variant/40 text-center space-y-3">
+                  <div className="w-12 h-12 rounded-2xl bg-surface-container-high flex items-center justify-center mx-auto text-on-surface-variant">
+                    <Wallet className="h-6 w-6 text-on-surface-variant" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-semibold text-on-surface">No Monthly Budget Configured Yet</h4>
+                    <p className="text-xs text-on-surface-variant max-w-md mx-auto mt-1">
+                      Setting up household budget envelopes enables real-time burn-down tracking and feeds directly into your
+                      <strong> Financial Health Score</strong> (Budget Discipline dimension).
+                    </p>
+                  </div>
+                  <div className="text-xs text-on-surface-variant">
+                    Total expenses logged this month: <strong className="text-on-surface">{currencySymbol}{Number(budgetData?.totalSpent || 0).toLocaleString()}</strong>
+                  </div>
+                  {currentMember?.role === MemberRole.OWNER ? (
+                    <button
+                      onClick={handleOpenBudgetModal}
+                      className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-primary text-on-primary text-xs font-semibold hover:bg-on-surface-variant transition shadow-sm"
+                    >
+                      <Plus className="h-4 w-4" />
+                      <span>Configure Family Budget Now</span>
+                    </button>
+                  ) : (
+                    <p className="text-[11px] text-on-surface-variant italic">
+                      Ask your household Owner to configure the family budget envelopes.
+                    </p>
+                  )}
                 </div>
-                <span className="text-[10px] text-secondary font-medium">30% remaining</span>
-              </div>
+              ) : (
+                /* Configured state: Summary metrics & Envelopes */
+                <>
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div className="p-3.5 rounded-xl bg-surface-container-low border border-outline-variant/40">
+                      <span className="text-[11px] font-medium text-on-surface-variant uppercase tracking-wider">Total Budget</span>
+                      <p className="text-lg font-semibold text-on-surface mt-1 tabular-nums">
+                        {currencySymbol}{Number(budgetData.totalBudget).toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="p-3.5 rounded-xl bg-surface-container-low border border-outline-variant/40">
+                      <span className="text-[11px] font-medium text-on-surface-variant uppercase tracking-wider">Total Spent</span>
+                      <p className="text-lg font-semibold text-on-surface mt-1 tabular-nums">
+                        {currencySymbol}{Number(budgetData.totalSpent).toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="p-3.5 rounded-xl bg-surface-container-low border border-outline-variant/40">
+                      <span className="text-[11px] font-medium text-on-surface-variant uppercase tracking-wider">Remaining</span>
+                      <p className={`text-lg font-semibold mt-1 tabular-nums ${budgetData.remainingBudget === 0 && budgetData.totalSpent > budgetData.totalBudget ? 'text-error' : 'text-secondary'}`}>
+                        {currencySymbol}{Number(budgetData.remainingBudget).toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="p-3.5 rounded-xl bg-surface-container-low border border-outline-variant/40">
+                      <span className="text-[11px] font-medium text-on-surface-variant uppercase tracking-wider">Overall Burn</span>
+                      <p className={`text-lg font-semibold mt-1 tabular-nums ${budgetData.utilizationPercentage > 100 ? 'text-error' : budgetData.utilizationPercentage > 85 ? 'text-amber-600' : 'text-on-surface'}`}>
+                        {budgetData.utilizationPercentage}%
+                      </p>
+                    </div>
+                  </div>
 
-              <div className="p-4 rounded-xl bg-surface-container-low border border-outline-variant/40 space-y-2">
-                <div className="flex justify-between items-center text-xs">
-                  <span className="font-semibold text-on-surface">Household & Repairs</span>
-                  <span className="text-on-surface-variant tabular-nums">₹1,800 / ₹5,000</span>
-                </div>
-                <div className="w-full h-1.5 rounded-full bg-surface-container-high overflow-hidden">
-                  <div className="h-full bg-secondary rounded-full" style={{ width: '36%' }} />
-                </div>
-                <span className="text-[10px] text-secondary font-medium">64% remaining</span>
-              </div>
+                  {/* Envelopes Grid */}
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-semibold text-on-surface uppercase tracking-wider">Category Allocations</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {budgetData.categories?.map((cat: any) => {
+                        const util = cat.utilizationPercentage || 0;
+                        const isOver = cat.isOverrun || util > 100;
+                        return (
+                          <div
+                            key={cat.id || cat.category}
+                            className={`p-4 rounded-xl border transition space-y-2.5 ${
+                              isOver
+                                ? 'bg-error-container/20 border-error/30'
+                                : 'bg-surface-container-low border-outline-variant/40'
+                            }`}
+                          >
+                            <div className="flex justify-between items-start text-xs">
+                              <div>
+                                <span className="font-semibold text-on-surface capitalize">
+                                  {cat.category.toLowerCase().replace(/_/g, ' ')}
+                                </span>
+                                {isOver && (
+                                  <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-error-container text-error uppercase">
+                                    Overrun
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-on-surface-variant tabular-nums text-xs">
+                                {currencySymbol}{Number(cat.spentAmount).toLocaleString()} / {currencySymbol}{Number(cat.allocatedAmount).toLocaleString()}
+                              </span>
+                            </div>
+
+                            <div className="w-full h-2 rounded-full bg-surface-container-high overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all duration-500 ${
+                                  isOver ? 'bg-error' : util > 80 ? 'bg-amber-500' : 'bg-secondary'
+                                }`}
+                                style={{ width: `${Math.min(util, 100)}%` }}
+                              />
+                            </div>
+
+                            <div className="flex justify-between items-center text-[10px]">
+                              <span className={isOver ? 'text-error font-medium' : 'text-on-surface-variant'}>
+                                {util}% utilized
+                              </span>
+                              <span className={`font-medium ${isOver ? 'text-error' : 'text-secondary'}`}>
+                                {isOver
+                                  ? `Over by ${currencySymbol}${(cat.spentAmount - cat.allocatedAmount).toLocaleString()}`
+                                  : `${currencySymbol}${Number(cat.remainingAmount).toLocaleString()} left`}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}
@@ -1901,6 +2108,135 @@ export default function HomeDashboardPage() {
         </div>
       )}
 
+      {/* Configure Family Budget Modal (Owner Only) */}
+      {showBudgetModal && currentMember?.role === MemberRole.OWNER && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm overflow-y-auto">
+          <div className="w-full max-w-lg rounded-2xl border border-outline-variant/60 bg-surface p-6 shadow-level3 my-8 space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-outline-variant/40">
+              <div className="flex flex-col">
+                <h3 className="text-base font-semibold text-on-surface">Configure Family Budget</h3>
+                <span className="text-[11px] text-on-surface-variant">Owner-Authoritative Envelopes</span>
+              </div>
+              <button
+                onClick={() => setShowBudgetModal(false)}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            {budgetError && (
+              <div className="p-3 bg-error-container/30 border border-error/20 rounded-xl text-xs text-error flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>{budgetError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleBudgetSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-on-surface mb-1">
+                  Total Monthly Household Budget ({currencySymbol}) *
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-2.5 text-xs font-semibold text-on-surface-variant">
+                    {currencySymbol}
+                  </span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="1"
+                    required
+                    value={budgetTotalInput}
+                    onChange={(e) => setBudgetTotalInput(e.target.value)}
+                    placeholder="e.g. 50000"
+                    className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest pl-8 pr-3 py-2 text-sm font-semibold text-on-surface focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+                <p className="text-[11px] text-on-surface-variant mt-1">
+                  Upper ceiling for total family spending this calendar month.
+                </p>
+              </div>
+
+              <div>
+                <div className="flex justify-between items-center mb-1.5">
+                  <label className="block text-xs font-semibold text-on-surface">
+                    Category Envelope Allocations ({currencySymbol})
+                  </label>
+                  {(() => {
+                    const totalBudget = parseFloat(budgetTotalInput) || 0;
+                    const allocatedSum = Object.values(categoryAllocations).reduce(
+                      (acc, v) => acc + (parseFloat(v) || 0),
+                      0
+                    );
+                    const diff = totalBudget - allocatedSum;
+                    return (
+                      <span className={`text-[11px] font-medium tabular-nums ${
+                        Math.abs(diff) < 0.01
+                          ? 'text-secondary font-semibold'
+                          : diff > 0
+                          ? 'text-on-surface-variant'
+                          : 'text-error font-semibold'
+                      }`}>
+                        Allocated: {currencySymbol}{allocatedSum.toLocaleString()} / {currencySymbol}{totalBudget.toLocaleString()}
+                        {Math.abs(diff) < 0.01 && ' (Balanced)'}
+                        {diff > 0 && ` (${currencySymbol}${diff.toLocaleString()} unassigned)`}
+                        {diff < 0 && ` (Over by ${currencySymbol}${Math.abs(diff).toLocaleString()})`}
+                      </span>
+                    );
+                  })()}
+                </div>
+
+                <div className="max-h-60 overflow-y-auto space-y-2 pr-1 rounded-xl border border-outline-variant/30 p-2 bg-surface-container-low">
+                  {Object.values(ExpenseCategory).map((cat) => (
+                    <div key={cat} className="flex items-center justify-between gap-3 p-1.5 rounded-lg hover:bg-surface-container transition">
+                      <span className="text-xs font-medium text-on-surface capitalize min-w-[130px]">
+                        {cat.toLowerCase().replace(/_/g, ' ')}
+                      </span>
+                      <div className="relative flex-1 max-w-[160px]">
+                        <span className="absolute left-2.5 top-1.5 text-xs text-on-surface-variant">
+                          {currencySymbol}
+                        </span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={categoryAllocations[cat] ?? ''}
+                          onChange={(e) =>
+                            setCategoryAllocations({
+                              ...categoryAllocations,
+                              [cat]: e.target.value,
+                            })
+                          }
+                          placeholder="0.00"
+                          className="w-full rounded-md border border-outline-variant bg-surface-container-lowest pl-6 pr-2 py-1 text-xs text-on-surface focus:outline-none focus:ring-1 focus:ring-primary text-right tabular-nums"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowBudgetModal(false)}
+                  className="px-4 py-2 rounded-xl bg-surface-container text-on-surface text-xs font-semibold hover:bg-surface-container-high transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={setBudgetMutation.isPending || !budgetTotalInput || parseFloat(budgetTotalInput) <= 0}
+                  className="px-5 py-2 rounded-xl bg-primary text-on-primary text-xs font-semibold hover:bg-on-surface-variant transition disabled:opacity-40 shadow-sm"
+                >
+                  {setBudgetMutation.isPending ? 'Saving Budget...' : 'Save Family Budget'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Mobile Bottom Navigation Bar (Visible on phones & tablets < md) */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 py-1.5 px-3 flex items-center justify-around md:hidden shadow-lg safe-area-bottom">
         <button
@@ -1922,6 +2258,18 @@ export default function HomeDashboardPage() {
           <Scale className="h-5 w-5" />
           <span className="text-[10px] mt-0.5 font-medium">Debts</span>
         </button>
+
+        {!isBachelor && (
+          <button
+            onClick={() => setActiveTab('envelopes')}
+            className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition ${
+              activeTab === 'envelopes' ? 'text-slate-900 font-bold' : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <Wallet className="h-5 w-5" />
+            <span className="text-[10px] mt-0.5 font-medium">Budgets</span>
+          </button>
+        )}
 
         {/* Floating Quick Add Action in Mobile Nav Center */}
         <button
