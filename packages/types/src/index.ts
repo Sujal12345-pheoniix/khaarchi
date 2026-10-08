@@ -93,6 +93,28 @@ export enum RecurringInterval {
   YEARLY = 'YEARLY',
 }
 
+export enum HealthStatus {
+  EXCELLENT = 'EXCELLENT',
+  HEALTHY = 'HEALTHY',
+  WATCH = 'WATCH',
+  AT_RISK = 'AT_RISK',
+  CRITICAL = 'CRITICAL',
+  BUILDING_PROFILE = 'BUILDING_PROFILE',
+}
+
+export enum InsightSeverity {
+  CRITICAL = 'CRITICAL',
+  WARNING = 'WARNING',
+  INFO = 'INFO',
+  POSITIVE = 'POSITIVE',
+}
+
+export enum DataSufficiency {
+  FULL = 'FULL',
+  PARTIAL = 'PARTIAL',
+  INSUFFICIENT = 'INSUFFICIENT',
+}
+
 export interface UserProfile {
   id: string;
   email: string;

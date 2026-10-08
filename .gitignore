@@ -44,6 +44,7 @@ coverage/
 .cache/
 tmp/
 scratch/
+*.tsbuildinfo
 
 # Prisma
 # Keep prisma schema and migrations in git, ignore sqlite or generated client if local

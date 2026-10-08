@@ -52,3 +52,38 @@ export enum ReceiptStatus {
   USER_VERIFIED = 'USER_VERIFIED',
   REJECTED = 'REJECTED',
 }
+
+export enum BillStatus {
+  UNPAID = 'UNPAID',
+  PAID = 'PAID',
+  OVERDUE = 'OVERDUE',
+}
+
+export enum RecurringInterval {
+  DAILY = 'DAILY',
+  WEEKLY = 'WEEKLY',
+  MONTHLY = 'MONTHLY',
+  YEARLY = 'YEARLY',
+}
+
+export enum HealthStatus {
+  EXCELLENT = 'EXCELLENT',
+  HEALTHY = 'HEALTHY',
+  WATCH = 'WATCH',
+  AT_RISK = 'AT_RISK',
+  CRITICAL = 'CRITICAL',
+  BUILDING_PROFILE = 'BUILDING_PROFILE',
+}
+
+export enum InsightSeverity {
+  CRITICAL = 'CRITICAL',
+  WARNING = 'WARNING',
+  INFO = 'INFO',
+  POSITIVE = 'POSITIVE',
+}
+
+export enum DataSufficiency {
+  FULL = 'FULL',
+  PARTIAL = 'PARTIAL',
+  INSUFFICIENT = 'INSUFFICIENT',
+}
