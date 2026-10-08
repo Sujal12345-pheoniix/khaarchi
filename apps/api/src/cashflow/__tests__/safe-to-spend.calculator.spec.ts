@@ -5,6 +5,7 @@ import {
   BillStatus,
   RecurringInterval,
   ExpenseCategory,
+  DataSufficiency,
 } from '@homeexpense/shared';
 import { SafeToSpendInput } from '../types/cashflow.types.js';
 
@@ -55,7 +56,7 @@ describe('calculateSafeToSpend (Pure Domain Engine)', () => {
     expect(result.safeToSpendCents).toBe(2900000);
     expect(result.status).toBe('HEALTHY');
     expect(result.confidence).toBe('HIGH');
-    expect(result.dataSufficiency).toBe('FULL');
+    expect(result.dataSufficiency).toBe(DataSufficiency.FULL);
     expect(result.components.availableCapacity).toBe(50000);
     expect(result.components.postedExpensesInPeriod).toBe(12000);
     expect(result.components.upcomingObligations).toBe(3000);
@@ -199,7 +200,7 @@ describe('calculateSafeToSpend (Pure Domain Engine)', () => {
 
       expect(result.status).toBe('INSUFFICIENT_DATA');
       expect(result.confidence).toBe('LOW');
-      expect(result.dataSufficiency).toBe('INSUFFICIENT');
+      expect(result.dataSufficiency).toBe(DataSufficiency.INSUFFICIENT);
       expect(result.components.capacitySource).toBe('UNAVAILABLE');
       expect(result.warnings.some((w) => w.code === 'MISSING_CAPACITY')).toBe(true);
     });
@@ -214,7 +215,7 @@ describe('calculateSafeToSpend (Pure Domain Engine)', () => {
 
       expect(result.status).toBe('INSUFFICIENT_DATA');
       expect(result.confidence).toBe('LOW');
-      expect(result.dataSufficiency).toBe('PARTIAL');
+      expect(result.dataSufficiency).toBe(DataSufficiency.PARTIAL);
       expect(result.components.capacitySource).toBe('UNAVAILABLE');
     });
   });

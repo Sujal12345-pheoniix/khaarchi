@@ -3,6 +3,7 @@ import {
   toMajor,
   roundFinancial,
   BillStatus,
+  DataSufficiency,
 } from '@homeexpense/shared';
 import {
   SafeToSpendInput,
@@ -152,7 +153,7 @@ export function calculateSafeToSpend(input: SafeToSpendInput): SafeToSpendResult
   let safeToSpendCents: number;
   let status: CashflowStatus;
   let confidence: ConfidenceLevel;
-  let dataSufficiency: 'FULL' | 'PARTIAL' | 'INSUFFICIENT';
+  let dataSufficiency: DataSufficiency;
 
   if (hasBudget) {
     safeToSpendCents =
@@ -166,10 +167,10 @@ export function calculateSafeToSpend(input: SafeToSpendInput): SafeToSpendResult
     // Data sufficiency and confidence for budgeted household
     const hasCommitmentsData = bills.length > 0 || recurringExpenses.length > 0;
     if (hasCommitmentsData) {
-      dataSufficiency = 'FULL';
+      dataSufficiency = DataSufficiency.FULL;
       confidence = 'HIGH';
     } else {
-      dataSufficiency = 'PARTIAL';
+      dataSufficiency = DataSufficiency.PARTIAL;
       confidence = 'MEDIUM';
     }
 
@@ -200,13 +201,13 @@ export function calculateSafeToSpend(input: SafeToSpendInput): SafeToSpendResult
       // Brand new home with zero data
       safeToSpendCents = 0;
       status = 'INSUFFICIENT_DATA';
-      dataSufficiency = 'INSUFFICIENT';
+      dataSufficiency = DataSufficiency.INSUFFICIENT;
       confidence = 'LOW';
     } else {
       // Home with activity but no capacity anchor
       safeToSpendCents = -totalKnownCommitmentsCents;
       status = 'INSUFFICIENT_DATA';
-      dataSufficiency = 'PARTIAL';
+      dataSufficiency = DataSufficiency.PARTIAL;
       confidence = 'LOW';
     }
   }
