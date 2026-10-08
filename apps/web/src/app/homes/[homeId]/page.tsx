@@ -44,6 +44,7 @@ import {
 } from 'lucide-react';
 import { PwaInstallPrompt } from '@/components/pwa-install-prompt';
 import { FinancialHealthCard } from '@/components/financial-health-card';
+import { SafeToSpendCard } from '@/components/safe-to-spend-card';
 import {
   ExpenseCategory,
   SplitType,
@@ -234,6 +235,8 @@ export default function HomeDashboardPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['expenses', homeId] });
       queryClient.invalidateQueries({ queryKey: ['balances', homeId] });
+      queryClient.invalidateQueries({ queryKey: ['safe-to-spend', homeId] });
+      queryClient.invalidateQueries({ queryKey: ['financial-health', homeId] });
       setShowAddExpense(false);
       setExpenseDesc('');
       setExpenseError(null);
@@ -252,6 +255,8 @@ export default function HomeDashboardPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['balances', homeId] });
       queryClient.invalidateQueries({ queryKey: ['expenses', homeId] });
+      queryClient.invalidateQueries({ queryKey: ['safe-to-spend', homeId] });
+      queryClient.invalidateQueries({ queryKey: ['financial-health', homeId] });
       setShowSettle(false);
       setSettleAmount('');
       setSettleNotes('');
@@ -390,6 +395,7 @@ export default function HomeDashboardPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['budget', homeId] });
       queryClient.invalidateQueries({ queryKey: ['financial-health', homeId] });
+      queryClient.invalidateQueries({ queryKey: ['safe-to-spend', homeId] });
       setShowBudgetModal(false);
       setBudgetSuccess('Family budget and category envelopes successfully saved.');
       setTimeout(() => setBudgetSuccess(null), 4000);
@@ -456,6 +462,8 @@ export default function HomeDashboardPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['expenses', homeId] });
       queryClient.invalidateQueries({ queryKey: ['balances', homeId] });
+      queryClient.invalidateQueries({ queryKey: ['safe-to-spend', homeId] });
+      queryClient.invalidateQueries({ queryKey: ['financial-health', homeId] });
     },
   });
 
@@ -697,6 +705,9 @@ export default function HomeDashboardPage() {
 
         {/* Financial Health Engine Card */}
         <FinancialHealthCard homeId={homeId} currencySymbol={currencySymbol} />
+
+        {/* Safe-to-Spend Cashflow Engine Card */}
+        <SafeToSpendCard homeId={homeId} currencySymbol={currencySymbol} />
 
         {/* Financial Metrics Strip */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
